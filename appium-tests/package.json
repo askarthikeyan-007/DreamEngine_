@@ -1,0 +1,13 @@
+{
+  "name": "dreamengine-appium-tests",
+  "version": "1.0.0",
+  "description": "E2E Appium mobile tests and Excel report generation for DreamEngine AI Mobile App",
+  "main": "tests/app-tests.js",
+  "scripts": {
+    "test": "node tests/app-tests.js"
+  },
+  "dependencies": {
+    "webdriverio": "^8.24.12",
+    "xlsx": "^0.18.5"
+  }
+}

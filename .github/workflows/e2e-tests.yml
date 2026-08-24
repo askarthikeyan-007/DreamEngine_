@@ -1,0 +1,177 @@
+name: DreamEngine AI - Multi-Platform Test Verification & Reports
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master, dev ]
+  workflow_dispatch:
+
+jobs:
+  # 1. Flutter Unit & Widget Tests
+  flutter-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java (required for Flutter Android builds)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Run Flutter Tests
+        run: flutter test
+
+  # 2. React Native E2E Tests (Appium on macOS runner with Emulator)
+  react-native-e2e-tests:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install React Native App Dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Install E2E Testing Suite Dependencies
+        run: |
+          cd react-native-e2e
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build React Native Android App
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.configureondemand=true
+
+      - name: Set up Appium CLI & Drivers
+        run: |
+          npm install -g appium
+          appium driver install uiautomator2
+
+      - name: Run E2E Tests on Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -no-audio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            appium --log ../appium.log &
+            echo "Waiting for Appium server to start..."
+            sleep 8
+            cd react-native-e2e
+            export APP_PATH="../android/app/build/outputs/apk/debug/app-debug.apk"
+            npm run test
+
+      - name: Upload React Native Excel Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: react-native-e2e-report
+          path: react-native-e2e/MonthlyReport.xlsx
+          if-no-files-found: warn
+
+      - name: Upload Appium System Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appium-system-logs
+          path: appium.log
+
+  # 3. Web Portal E2E Tests (Selenium & Headless Chrome)
+  selenium-web-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          cd selenium-tests
+          npm install
+
+      - name: Run Web Selenium E2E Tests
+        run: |
+          cd selenium-tests
+          node tests/login-tests.js
+
+      - name: Upload Selenium Web Excel Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenium-web-report
+          path: selenium-tests/TestReport.xlsx
+          if-no-files-found: warn
+
+  # 4. Mobile Appium E2E Tests (Appium Virtual Driver Fallback)
+  appium-mobile-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          cd appium-tests
+          npm install
+
+      - name: Run Appium Mobile E2E Tests (Simulated Driver Fallback)
+        run: |
+          cd appium-tests
+          node tests/app-tests.js
+
+      - name: Upload Appium Mobile Excel Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appium-mobile-report
+          path: appium-tests/AppiumTestReport.xlsx
+          if-no-files-found: warn

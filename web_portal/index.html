@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DreamEngine AI - Dev Portal</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Google Fonts matching the Flutter theme -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="particle-background"></div>
+
+    <!-- Login Overlay Gate -->
+    <div id="login-overlay" class="login-overlay-panel">
+        <div class="login-card glass-panel animate-glow-red">
+            <div class="panel-header">
+                <h2>DREAMENGINE DELEGATE DECRYPT</h2>
+                <span class="panel-icon">&#128274;</span>
+            </div>
+            <p class="panel-desc" style="color: var(--neon-blue); letter-spacing: 0.5px; font-weight: 500;">
+                SECURE INTERFACE LINK ENGAGED. AUTHORIZED ACCESS ONLY.
+            </p>
+            
+            <div class="form-group">
+                <label for="login-username">OPERATOR IDENTITY SIGNATURE (EMAIL)</label>
+                <input type="email" id="login-username" placeholder="e.g. operator@dreamengine.ai" value="operator.antimatter@dreamengine.ai">
+            </div>
+            
+            <div class="form-group">
+                <label for="login-password">ACCESS MATRIX KEY (PASSCODE)</label>
+                <input type="password" id="login-password" placeholder="••••••••••••••••" value="DREAM-SECURE-2026">
+            </div>
+            
+            <button class="submit-btn" id="login-submit-btn" onclick="attemptWebLogin()" style="margin-top: 12px; margin-bottom: 12px;">ENGAGE DECRYPT LINK</button>
+            
+            <!-- Dedicated Console Output for Auth Feedback -->
+            <div class="api-console" style="margin-top: 8px;">
+                <div class="console-header" style="font-size: 8px;">
+                    <span>GATEWAY AUTH STATE</span>
+                </div>
+                <div class="console-body" id="login-console-output" style="font-size: 10px; min-height: 40px; color: #FF5252;">
+                    &gt; STATUS: GATEWAY LOCKED // ACCESS PORTAL SECURED.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-logo">
+                <h1>DREAMENGINE</h1>
+                <span class="hud-label">AUTHORIZED DELEGATE GATEWAY // STATUS: COMPILED</span>
+            </div>
+            <div class="header-actions" style="display: flex; align-items: center; gap: 12px;">
+                <button class="hud-control-btn" id="btn-customize-hud" onclick="toggleWebCustomizeHUD()">CUSTOMIZE HUD</button>
+                <button class="hud-control-btn reset-btn" id="btn-reset-hud" onclick="resetWebCustomizeHUD()" style="display: none; border-color: #FF1E27; color: #FF1E27;">RESET HUD</button>
+                <div class="connection-status">
+                    <span class="status-dot animate-glow"></span>
+                    <span class="status-text">SECURE NODE ONLINE</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- main grid -->
+        <div class="dashboard-grid" id="main-dashboard-grid">
+            <!-- Left Side: OTP Dispatch and News -->
+            <div class="grid-col flex-col" id="col-left" ondragover="allowWebDrop(event)" ondragleave="handleWebDragLeave(event)" ondrop="handleWebDrop(event, 'left')">
+                <!-- OTP section -->
+                <section class="glass-panel draggable-hud-panel" id="otp-section" draggable="false" ondragstart="handleWebDragStart(event)" ondragend="handleWebDragEnd(event)">
+                    <div class="panel-header">
+                        <h2>OTP API DISPATCH CENTER</h2>
+                        <span class="panel-icon">&#128274;</span>
+                    </div>
+                    <p class="panel-desc">DISPATCH SECURE PASSCODES DIRECTLY VIA TWILIO AND SENDGRID APIs</p>
+
+                    <div class="form-group">
+                        <label for="otp-recipient">OPERATOR RECIPIENT (EMAIL OR PHONE)</label>
+                        <input type="text" id="otp-recipient" placeholder="e.g. agent@gmail.com or +15550192834" value="agent.antimatter@gmail.com">
+                    </div>
+
+                    <div class="route-selector">
+                        <button class="route-btn active" id="btn-email" onclick="selectRoute('email')">GMAIL (SENDGRID)</button>
+                        <button class="route-btn" id="btn-sms" onclick="selectRoute('sms')">MOBILE (TWILIO)</button>
+                    </div>
+
+                    <!-- Collapsible Credentials -->
+                    <details class="credentials-details">
+                        <summary>API GATEWAY CONFIGURATION (OPTIONAL)</summary>
+                        <div class="details-content">
+                            <div class="form-row">
+                                <div class="form-group half">
+                                    <label for="twilio-sid">TWILIO Account SID</label>
+                                    <input type="password" id="twilio-sid" placeholder="ACxxxxxxxxxxxxxxxx">
+                                </div>
+                                <div class="form-group half">
+                                    <label for="twilio-token">TWILIO Auth Token</label>
+                                    <input type="password" id="twilio-token" placeholder="••••••••••••••••">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="twilio-from">TWILIO From Number</label>
+                                <input type="text" id="twilio-from" placeholder="+15017122661">
+                            </div>
+                            <div class="form-group">
+                                <label for="sendgrid-key">SENDGRID API Key</label>
+                                <input type="password" id="sendgrid-key" placeholder="SG.xxxxxxxxxxxxxxxx">
+                            </div>
+                            <div class="form-group">
+                                <label for="sender-email">SENDER Verification Email</label>
+                                <input type="email" id="sender-email" placeholder="dossier-alerts@yourdomain.com">
+                            </div>
+                        </div>
+                    </details>
+
+                    <button class="submit-btn" id="dispatch-btn" onclick="dispatchOtp()">DISPATCH SECURE PASSCODE</button>
+
+                    <!-- Monospace logging screen -->
+                    <div class="api-console">
+                        <div class="console-header">
+                            <span>GATEWAY CONSOLE OUTPUT</span>
+                            <span class="clear-console" onclick="clearConsole()">CLEAR</span>
+                        </div>
+                        <div class="console-body" id="console-logs">
+                            &gt; SYSTEM SECURED. STANDBY FOR API OPERATIONS.
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Game news section -->
+                <section class="glass-panel draggable-hud-panel" id="news-section" draggable="false" ondragstart="handleWebDragStart(event)" ondragend="handleWebDragEnd(event)">
+                    <div class="panel-header">
+                        <h2>DAILY GAMES NEWS WIRE</h2>
+                        <span class="panel-icon">&#128240;</span>
+                    </div>
+                    <p class="panel-desc">LIVE DAILY SYNC FETCHED DYNAMICALLY FROM GAMESPOT FEED</p>
+                    <div class="news-list" id="news-container">
+                        <!-- populated via JS -->
+                        <div class="loading-spinner"></div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Side: DevGram social network -->
+            <div class="grid-col flex-col" id="col-right" ondragover="allowWebDrop(event)" ondragleave="handleWebDragLeave(event)" ondrop="handleWebDrop(event, 'right')">
+                <section class="glass-panel draggable-hud-panel" id="devgram-section" draggable="false" ondragstart="handleWebDragStart(event)" ondragend="handleWebDragEnd(event)">
+                    <div class="panel-header">
+                        <h2>DEVGRAM NETWORK activity</h2>
+                        <span class="panel-icon">&#128248;</span>
+                    </div>
+                    <p class="panel-desc">SHARE SCREENSHOTS, CAPTURE CODE, AND SYNC WITH OTHER DEVELOPERS</p>
+
+                    <!-- Bubble Operators (Stories) -->
+                    <div class="stories-row" id="stories-container">
+                        <!-- populated via JS -->
+                    </div>
+
+                    <!-- Feed/Chat Switcher Tabs -->
+                    <div class="devgram-tabs">
+                        <button class="tab-btn active" id="tab-feed" onclick="switchDevGramTab('feed')">GRID FEED</button>
+                        <button class="tab-btn" id="tab-chat" onclick="switchDevGramTab('chat')">DIRECT CHATS</button>
+                        <button class="tab-btn" id="tab-stocks" onclick="switchDevGramTab('stocks')">STOCKS & GAMES</button>
+                    </div>
+
+                    <!-- Tab View 1: Feed Grid -->
+                    <div id="devgram-feed-view" class="tab-view active">
+                        <!-- Create Post Button -->
+                        <button class="accent-btn" onclick="openCreatePostModal()">SHARE NEW WORK CAPTURE</button>
+                        <!-- Feed Posts -->
+                        <div class="posts-feed" id="posts-container">
+                            <div class="loading-spinner"></div>
+                        </div>
+                    </div>
+
+                    <!-- Tab View 2: Direct Chat Shell -->
+                    <div id="devgram-chat-view" class="tab-view">
+                        <div class="web-chat-layout">
+                            <div class="chat-sidebar" id="chat-sidebar-threads">
+                                <!-- Threads populated via JS -->
+                            </div>
+                            <div class="chat-window">
+                                <div class="chat-window-header" id="chat-header-info">
+                                    SELECT THREAD...
+                                </div>
+                                <div class="chat-window-body" id="chat-msg-thread">
+                                    <div class="empty-chat-msg">SELECT AN OPERATOR THREAD TO LINK SIGNALS</div>
+                                </div>
+                                <form class="chat-window-footer" onsubmit="sendWebChatMessage(event)">
+                                    <input type="text" id="chat-send-input" placeholder="LOG FEEDBACK SIGNAL..." disabled>
+                                    <button type="submit" id="chat-send-btn" disabled>SEND</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab View 3: Stocks & Game Store -->
+                    <div id="devgram-stocks-view" class="tab-view">
+                        <!-- Portfolio Balances -->
+                        <div class="stocks-portfolio-card">
+                            <div class="portfolio-stat">
+                                <span class="stat-lbl">TOTAL PORTFOLIO VALUE</span>
+                                <span class="stat-val" id="web-portfolio-val">$10,000.00</span>
+                            </div>
+                            <div class="portfolio-stat">
+                                <span class="stat-lbl">LIQUID CASH CREDITS</span>
+                                <span class="stat-val" id="web-credits-val" style="color: var(--neon-blue);">$10,000.00</span>
+                            </div>
+                        </div>
+
+                        <!-- Active Holdings -->
+                        <div class="stocks-holdings-container">
+                            <span class="hud-label">PORTFOLIO ASSET HOLDINGS</span>
+                            <div class="holdings-list" id="web-holdings-list">
+                                <div class="empty-holdings">NO SHARE ASSETS OWNED</div>
+                            </div>
+                        </div>
+
+                        <!-- Stock Tickers List -->
+                        <div class="stocks-ticker-board">
+                            <span class="hud-label">STUDIO STOCKS TICKER BOARD</span>
+                            <div class="stocks-list" id="web-stocks-list">
+                                <!-- Populated dynamically by app.js -->
+                            </div>
+                        </div>
+
+                        <!-- Trading Input Panel -->
+                        <div class="stocks-trade-panel" id="web-trade-panel" style="display:none;">
+                            <span class="hud-label" id="trade-panel-title">TRADE SECURITY: VESP</span>
+                            <div class="trade-row">
+                                <div class="form-group half">
+                                    <label for="trade-qty">SHARES QUANTITY</label>
+                                    <input type="number" id="trade-qty" value="10" min="1">
+                                </div>
+                                <div class="trade-actions-row">
+                                    <button class="route-btn" style="border-color: #FF1E27; color: #FF1E27;" onclick="executeWebTrade('sell')">SELL</button>
+                                    <button class="submit-btn" style="margin-bottom:0;" onclick="executeWebTrade('buy')">BUY</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Game Store Catalog -->
+                        <div class="game-store-board">
+                            <span class="hud-label">STUDIO COMPILED GAMES SHOP</span>
+                            <div class="game-store-list" id="web-games-list">
+                                <!-- Populated dynamically by app.js -->
+                            </div>
+                        </div>
+
+                        <!-- Steam & Epic Deals Catalog -->
+                        <div class="game-store-board" style="margin-top: 24px;">
+                            <span class="hud-label" style="color: var(--neon-blue); text-shadow: 0 0 5px rgba(255, 30, 39, 0.4);">LIVE STEAM & EPIC DEALS WIRE (90% OFF)</span>
+                            <div class="game-store-list" id="web-deals-list">
+                                <div class="loading-spinner"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Post Modal Dialog -->
+    <div class="modal" id="create-post-modal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h3>BROADCAST WORK MESH</h3>
+                <span class="close-modal" onclick="closeCreatePostModal()">&times;</span>
+            </div>
+            <div class="form-group">
+                <label for="post-author">AGENT NAME</label>
+                <input type="text" id="post-author" value="ANTIMATTER" placeholder="OPERATOR USERNAME">
+            </div>
+            <div class="form-group">
+                <label for="post-img">HUD CAPTURE SEED</label>
+                <select id="post-img" onchange="previewImageChange()">
+                    <option value="https://picsum.photos/seed/voxel/600/400">VOXEL CITY CAPTURE</option>
+                    <option value="https://picsum.photos/seed/racing/600/400">PHYSICS VEHICLE DRIVE</option>
+                    <option value="https://picsum.photos/seed/cyber/600/400">NETCODE PIPELINE DEBUG</option>
+                    <option value="https://picsum.photos/seed/synth/600/400">PROCEDURAL TRACK WAVES</option>
+                </select>
+                <div style="margin-top: 8px;">
+                    <label class="custom-file-upload btn route-btn" style="display: inline-block; cursor: pointer; text-align: center; border: 1px dashed var(--neon-blue); padding: 8px 12px; border-radius: 4px;">
+                        <input type="file" id="post-file-upload" accept="image/*" style="display: none;" onchange="handleWebPostImageUpload(event)">
+                        UPLOAD PHOTO FROM DEVICE
+                    </label>
+                </div>
+            </div>
+            <div class="image-preview-box">
+                <img id="modal-img-preview" src="https://picsum.photos/seed/voxel/600/400" alt="Preview">
+            </div>
+            <div class="form-group">
+                <label for="post-caption">CAPTION TEXT</label>
+                <textarea id="post-caption" rows="3" placeholder="Compile details and #hashtags..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="route-btn" onclick="closeCreatePostModal()">CANCEL</button>
+                <button class="submit-btn" onclick="submitPost()">TRANSMIT TO MATRIX</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stories Viewer Fullscreen Modal Overlay -->
+    <div class="modal" id="story-viewer-modal">
+        <div class="story-viewer-content">
+            <div class="story-progress-container">
+                <div class="story-progress-bar" id="story-progress"></div>
+            </div>
+            <div class="story-header">
+                <span class="story-author" id="story-author-name">VESPER_NET</span>
+                <span class="close-modal" onclick="closeStoryViewer()">&times;</span>
+            </div>
+            <div class="story-body" onclick="advanceOrCloseStory()">
+                <img id="story-img" src="" alt="Story Image">
+            </div>
+        </div>
+    </div>
+
+    <!-- User Profile Explorer Modal Dialog -->
+    <div class="modal" id="user-profile-modal">
+        <div class="modal-content glass-panel" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>OPERATOR PROFILE</h3>
+                <span class="close-modal" onclick="closeUserProfileModal()">&times;</span>
+            </div>
+            <div class="profile-header-info">
+                <div class="profile-avatar-large" id="profile-avatar">&#128100;</div>
+                <div class="profile-meta-text">
+                    <h4 id="profile-name">VESPER_NET</h4>
+                    <span class="hud-label" id="profile-role">NETRUNNER LEGEND</span>
+                    <p id="profile-email">vesper.x@cybernet.io</p>
+                </div>
+            </div>
+            <div class="profile-stats">
+                <div class="stat-box">
+                    <span class="stat-val" id="profile-posts-count">3</span>
+                    <span class="stat-lbl">POSTS</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-val" id="profile-connections-val">324</span>
+                    <span class="stat-lbl">CONNECTIONS</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-val" id="profile-ping-val">18ms</span>
+                    <span class="stat-lbl">PING</span>
+                </div>
+            </div>
+            <div class="profile-bio-box">
+                <h5>COGNITIVE BIO</h5>
+                <p id="profile-bio">...</p>
+            </div>
+            <div class="modal-actions">
+                <button class="route-btn" onclick="toggleWebConnection()" id="connect-btn">DISCONNECT</button>
+                <button class="submit-btn" onclick="openWebChatFromProfile()" style="margin-bottom:0;">DIRECT SIGNAL</button>
+            </div>
+            <div class="profile-posts-title">WORK CAPTURE ARCHIVES</div>
+            <div class="profile-posts-grid" id="profile-posts-grid-container">
+                <!-- Posts grid thumbnails populated via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Story Upload Modal Dialog -->
+    <div class="modal" id="story-upload-modal">
+        <div class="modal-content glass-panel" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>TRANSMIT COGNITIVE GRID STORY</h3>
+                <span class="close-modal" onclick="closeStoryUploadModal()">&times;</span>
+            </div>
+            <p class="panel-desc">DISPATCH STORY LOG COMPILATION SEGMENT</p>
+            <div class="form-group">
+                <label for="story-img-select">STORY HUD CAPTURE</label>
+                <select id="story-img-select" onchange="previewStoryImageChange()">
+                    <option value="https://picsum.photos/seed/cyberstory/600/1000">CYBER WORLD STORY</option>
+                    <option value="https://picsum.photos/seed/voxelstory/600/1000">VOXEL CITY STORY</option>
+                    <option value="https://picsum.photos/seed/racingstory/600/1000">RACING SIM STORY</option>
+                    <option value="https://picsum.photos/seed/synthstory/600/1000">MULTIPLATE LOG STORY</option>
+                </select>
+                <div style="margin-top: 8px;">
+                    <label class="custom-file-upload btn route-btn" style="display: inline-block; cursor: pointer; text-align: center; border: 1px dashed var(--neon-green); padding: 8px 12px; border-radius: 4px;">
+                        <input type="file" id="story-file-upload" accept="image/*" style="display: none;" onchange="handleWebStoryImageUpload(event)">
+                        UPLOAD PHOTO FROM DEVICE
+                    </label>
+                </div>
+            </div>
+            <div class="image-preview-box" id="story-preview-container" style="display: none; height: 160px; margin-bottom: 15px;">
+                <img id="modal-story-preview" src="" alt="Story Preview" style="height: 100%; width: 100%; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);">
+            </div>
+            <div class="modal-actions">
+                <button class="route-btn" onclick="closeStoryUploadModal()">CANCEL</button>
+                <button class="submit-btn" onclick="submitWebStory()" style="margin-bottom:0;">TRANSMIT STORY</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
