@@ -34,9 +34,9 @@ jobs:
       - name: Run Flutter Tests
         run: flutter test
 
-  # 2. React Native E2E Tests (Appium on macOS runner with Emulator)
+  # 2. React Native E2E Tests (Appium on Ubuntu runner with Emulator)
   react-native-e2e-tests:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - name: Checkout Code
@@ -80,12 +80,18 @@ jobs:
           npm install -g appium
           appium driver install uiautomator2@2
 
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Run E2E Tests on Android Emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
           target: google_apis
-          arch: arm64-v8a
+          arch: x86_64
           force-avd-creation: false
           emulator-options: -no-window -no-audio -no-boot-anim -camera-back none
           disable-animations: true
