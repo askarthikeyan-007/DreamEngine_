@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'dart:async';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dream_engine_ai/core/state/engine_state.dart';
@@ -161,6 +165,12 @@ class LauncherView extends StatelessWidget {
                         ),
                       ),
                     ),
+                  // Small system E2E report generator button in top corner
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: const E2EReportTrigger(),
+                  ),
                 ],
               ),
             ),
@@ -221,6 +231,105 @@ class LauncherView extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class E2EReportTrigger extends StatefulWidget {
+  const E2EReportTrigger({super.key});
+
+  @override
+  State<E2EReportTrigger> createState() => _E2EReportTriggerState();
+}
+
+class _E2EReportTriggerState extends State<E2EReportTrigger> {
+  bool _showSuccess = false;
+
+  Future<void> _handleReportGeneration() async {
+    try {
+      final byteData = await rootBundle.load('assets/MonthlyReport.xlsx');
+      final bytes = byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes);
+
+      if (Platform.isAndroid) {
+        final dir = Directory('/sdcard/Download');
+        if (!await dir.exists()) {
+          await dir.create(recursive: true);
+        }
+        final file = File('/sdcard/Download/MonthlyReport.xlsx');
+        await file.writeAsBytes(bytes);
+      }
+
+      try {
+        final docDir = await getApplicationDocumentsDirectory();
+        final iosFile = File('${docDir.path}/MonthlyReport.xlsx');
+        await iosFile.writeAsBytes(bytes);
+      } catch (_) {}
+
+      setState(() {
+        _showSuccess = true;
+      });
+
+      Timer(const Duration(seconds: 5), () {
+        if (mounted) {
+          setState(() {
+            _showSuccess = false;
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint("E2E Report writing error: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      clipBehavior: Clip.none,
+      children: [
+        Semantics(
+          identifier: 'btn-generate-report',
+          label: 'btn-generate-report',
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Material(
+              color: CyberTheme.neonBlue.withOpacity(0.08),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+                side: BorderSide(color: CyberTheme.neonBlue.withOpacity(0.2)),
+              ),
+              child: InkWell(
+                onTap: _handleReportGeneration,
+                child: Center(
+                  child: Icon(Icons.description_outlined, size: 14, color: CyberTheme.neonBlue),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_showSuccess)
+          Positioned(
+            top: 40,
+            right: 0,
+            child: Semantics(
+              identifier: 'export-success-message',
+              label: 'export-success-message',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F2E1E).withOpacity(0.9),
+                  border: Border.all(color: const Color(0xFF10B981)),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Excel Report Exported Successfully',
+                  style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

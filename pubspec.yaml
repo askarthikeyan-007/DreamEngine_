@@ -76,6 +76,7 @@ flutter:
     - assets/logo.png
     - assets/cinematic_videos/render_this_8.mp4
     - assets/world_map.png
+    - assets/MonthlyReport.xlsx
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
