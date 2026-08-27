@@ -42,24 +42,26 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java (required for Flutter Android builds)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.x'
+          channel: 'stable'
+          cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - name: Install React Native App Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+      - name: Install Flutter Dependencies
+        run: flutter pub get
 
       - name: Install E2E Testing Suite Dependencies
         run: |
@@ -70,13 +72,8 @@ jobs:
             npm install
           fi
 
-      - name: Build React Native Android App
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
-        env:
-          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.configureondemand=true
+      - name: Build Flutter Android App
+        run: flutter build apk --debug
 
       - name: Set up Appium CLI & Drivers
         run: |
