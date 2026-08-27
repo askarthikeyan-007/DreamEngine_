@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 class SqliteService {
   static Database? _database;
 
-  static bool get _useFallback => kIsWeb;
+  static bool get _useFallback => kIsWeb || Platform.environment.containsKey('FLUTTER_TEST');
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -20,6 +20,9 @@ class SqliteService {
   }
 
   static Future<Database> _initDatabase() async {
+    if (_useFallback) {
+      return databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+    }
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;

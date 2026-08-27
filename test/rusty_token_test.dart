@@ -2,10 +2,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dream_engine_ai/core/state/engine_state.dart';
 
+import 'package:google_fonts/google_fonts.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {
+    GoogleFonts.config.allowRuntimeFetching = false;
+
     // Mock Path Provider Method Channel
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
