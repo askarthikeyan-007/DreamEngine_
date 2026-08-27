@@ -8,6 +8,10 @@ exports.config = {
     port: 4723,
     path: '/',
 
+    autoCompileOpts: {
+        autoCompile: false
+    },
+
     //
     // ==================
     // Specify Test Files
