@@ -289,6 +289,14 @@ class EngineState with ChangeNotifier {
   void updateCustomProfileImage(String? path) {
     customProfileImagePath = path;
     notifyListeners();
+    SqliteService.updateOperatorProfile(
+      email: operatorEmail,
+      name: operatorName,
+      avatarIndex: selectedAvatarIndex,
+      role: operatorRole,
+      bio: operatorBio,
+      profileImage: customProfileImagePath,
+    );
   }
 
   void updateOperatorProfile({required String name, required String email, required String bio, required String role}) {
@@ -310,6 +318,14 @@ class EngineState with ChangeNotifier {
       });
     }
     notifyListeners();
+    SqliteService.updateOperatorProfile(
+      email: operatorEmail,
+      name: operatorName,
+      avatarIndex: selectedAvatarIndex,
+      role: operatorRole,
+      bio: operatorBio,
+      profileImage: customProfileImagePath,
+    );
   }
 
   String _activeOtpCode = "";
@@ -480,7 +496,11 @@ class EngineState with ChangeNotifier {
       operatorName = userData["name"]?.toString() ?? emailOrPhone.split('@')[0].toUpperCase();
       selectedAvatarIndex = int.tryParse(userData["avatar"]?.toString() ?? "0") ?? 0;
       operatorRole = userData["role"]?.toString() ?? "JUNIOR SYSTEM CODER";
-      operatorBio = "Operator dossier synced from SQLite database.";
+      operatorBio = userData["bio"]?.toString() ?? "Procedurally compiling realities since seed 0x4B291A. Specializes in advanced particle synthesis.";
+      customProfileImagePath = userData["profile_image"]?.toString();
+      if (customProfileImagePath != null && customProfileImagePath!.isEmpty) {
+        customProfileImagePath = null;
+      }
       
       await reloadOperators();
       fetchGameNews();
@@ -1295,6 +1315,14 @@ class EngineState with ChangeNotifier {
   void setAvatarIndex(int index) {
     selectedAvatarIndex = index;
     notifyListeners();
+    SqliteService.updateOperatorProfile(
+      email: operatorEmail,
+      name: operatorName,
+      avatarIndex: selectedAvatarIndex,
+      role: operatorRole,
+      bio: operatorBio,
+      profileImage: customProfileImagePath,
+    );
   }
 
   // Soundtrack controls

@@ -28,14 +28,28 @@ class SqliteService {
     final path = join(documentsDirectory.path, "dream_engine.db");
     return await openDatabase(
       path,
-      version: 2,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           try {
             await db.execute("ALTER TABLE operators ADD COLUMN has_logged_in INTEGER DEFAULT 0");
           } catch (e) {
-            debugPrint("Alter table error: $e");
+            debugPrint("Alter table error (has_logged_in): $e");
+          }
+        }
+        if (oldVersion < 3) {
+          try {
+            await db.execute("ALTER TABLE operators ADD COLUMN bio TEXT");
+          } catch (e) {
+            debugPrint("Alter table error (bio): $e");
+          }
+        }
+        if (oldVersion < 4) {
+          try {
+            await db.execute("ALTER TABLE operators ADD COLUMN profile_image TEXT");
+          } catch (e) {
+            debugPrint("Alter table error (profile_image): $e");
           }
         }
       },
@@ -53,6 +67,8 @@ class SqliteService {
         ping TEXT,
         phone TEXT,
         password TEXT,
+        bio TEXT,
+        profile_image TEXT,
         has_logged_in INTEGER DEFAULT 0
       )
     ''');
@@ -498,6 +514,8 @@ class SqliteService {
         "role": "JUNIOR SYSTEM CODER",
         "avatar": avatarIndex.toString(),
         "phone": cleanPhone,
+        "bio": "Procedurally compiling realities since seed 0x4B291A. Specializes in advanced particle synthesis.",
+        "profile_image": "",
         "has_logged_in": "0",
       });
       debugPrint("[SqliteService] SimDB: Registered local account: $email");
@@ -525,6 +543,8 @@ class SqliteService {
         'ping': '1ms',
         'phone': cleanPhone,
         'password': password,
+        'bio': 'Procedurally compiling realities since seed 0x4B291A. Specializes in advanced particle synthesis.',
+        'profile_image': null,
         'has_logged_in': 0,
       });
       debugPrint("[SqliteService] DB: Registered account: $email");
@@ -606,6 +626,49 @@ class SqliteService {
 
     debugPrint("[SqliteService] DB: Operator login failed - Account not found: $searchKey");
     return null;
+  }
+
+  static Future<bool> updateOperatorProfile({
+    required String email,
+    required String name,
+    required int avatarIndex,
+    required String role,
+    required String bio,
+    String? profileImage,
+  }) async {
+    final cleanEmail = email.toLowerCase().trim();
+    if (_useFallback) {
+      final idx = _webUsers.indexWhere((u) => u["email"]?.toLowerCase() == cleanEmail);
+      if (idx >= 0) {
+        _webUsers[idx]["name"] = name;
+        _webUsers[idx]["avatar"] = avatarIndex.toString();
+        _webUsers[idx]["role"] = role;
+        _webUsers[idx]["bio"] = bio;
+        _webUsers[idx]["profile_image"] = profileImage ?? "";
+        return true;
+      }
+      return false;
+    }
+
+    try {
+      final db = await database;
+      await db.update(
+        'operators',
+        {
+          'name': name,
+          'avatar': avatarIndex.toString(),
+          'role': role,
+          'bio': bio,
+          'profile_image': profileImage,
+        },
+        where: 'LOWER(email) = ?',
+        whereArgs: [cleanEmail],
+      );
+      return true;
+    } catch (e) {
+      debugPrint("[SqliteService] Update operator profile error: $e");
+      return false;
+    }
   }
 
   static Future<List<Map<String, String>>> fetchOperators() async {

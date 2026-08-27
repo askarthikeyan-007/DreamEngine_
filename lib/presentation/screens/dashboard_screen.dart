@@ -48,9 +48,7 @@ class _HeaderData {
 
   @override
   bool operator ==(Object other) =>
-      other is _HeaderData &&
-      other.name == name &&
-      other.email == email;
+      other is _HeaderData && other.name == name && other.email == email;
 
   @override
   int get hashCode => Object.hash(name, email);
@@ -63,7 +61,8 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+class _DashboardScreenState extends State<DashboardScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _visualizerController;
   final List<String> _terminalLogs = [];
   final ScrollController _logScrollController = ScrollController();
@@ -71,8 +70,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   // Customizable HUD layout state
   bool _isCustomizing = false;
-  final List<String> _leftModules = ['satellite_map', 'projects', 'overrides', 'news'];
-  final List<String> _rightModules = ['operators', 'social', 'visualizer', 'console'];
+  final List<String> _leftModules = [
+    'satellite_map',
+    'projects',
+    'overrides',
+    'news',
+  ];
+  final List<String> _rightModules = [
+    'operators',
+    'social',
+    'visualizer',
+    'console',
+  ];
 
   @override
   void initState() {
@@ -131,8 +140,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     _logScrollController.dispose();
     super.dispose();
   }
-
-
 
   Color _getThemeColor(AppTheme theme) {
     if (theme == AppTheme.ironMan) return Colors.amber;
@@ -199,7 +206,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _wrapWithDraggable(String moduleName, Widget child, bool isLeftColumn, Color themeColor) {
+  Widget _wrapWithDraggable(
+    String moduleName,
+    Widget child,
+    bool isLeftColumn,
+    Color themeColor,
+  ) {
     if (!_isCustomizing) return child;
 
     return DragTarget<String>(
@@ -234,16 +246,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   padding: const EdgeInsets.all(12),
                   child: Text(
                     "RECONFIGURING MESH: ${moduleName.toUpperCase()}...",
-                    style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
+                    style: CyberTheme.monospaceStyle(
+                      fontSize: 10,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-          childWhenDragging: Opacity(
-            opacity: 0.2,
-            child: child,
-          ),
+          childWhenDragging: Opacity(opacity: 0.2, child: child),
           child: Container(
             decoration: BoxDecoration(
               border: Border.all(
@@ -266,7 +278,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: Colors.white24),
                     ),
-                    child: const Icon(Icons.drag_indicator_rounded, color: Colors.white70, size: 14),
+                    child: const Icon(
+                      Icons.drag_indicator_rounded,
+                      color: Colors.white70,
+                      size: 14,
+                    ),
                   ),
                 ),
               ],
@@ -283,14 +299,24 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         return const SatelliteWorldMap();
       case 'projects':
         return Selector<EngineState, _ProjectsData>(
-          selector: (context, state) => _ProjectsData(state.gameTitle, state.gameGenre, state.proceduralSeed),
+          selector: (context, state) => _ProjectsData(
+            state.gameTitle,
+            state.gameGenre,
+            state.proceduralSeed,
+          ),
           builder: (context, data, _) {
             final tempState = Provider.of<EngineState>(context, listen: false);
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text("Procedural Projects", style: CyberTheme.headingStyle(fontSize: 16, color: Colors.white)),
+                Text(
+                  "Procedural Projects",
+                  style: CyberTheme.headingStyle(
+                    fontSize: 16,
+                    color: Colors.white,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 _buildProjectsLayout(tempState, themeColor, isMobile),
               ],
@@ -299,7 +325,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         );
       case 'overrides':
         return Selector<EngineState, _OverridesData>(
-          selector: (context, state) => _OverridesData(state.rayTracingEnabled, state.weatherSystem),
+          selector: (context, state) =>
+              _OverridesData(state.rayTracingEnabled, state.weatherSystem),
           builder: (context, data, _) {
             final tempState = Provider.of<EngineState>(context, listen: false);
             return _buildOverridesLayout(tempState, themeColor);
@@ -349,39 +376,83 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     // Dynamic Module Layout Generation
     final List<Widget> leftChildren = [];
     for (int i = 0; i < _leftModules.length; i++) {
-      leftChildren.add(_wrapWithDraggable(_leftModules[i], _buildModule(_leftModules[i], themeColor, isMobile), true, themeColor));
-      if (i < _leftModules.length - 1) leftChildren.add(const SizedBox(height: 16));
+      leftChildren.add(
+        _wrapWithDraggable(
+          _leftModules[i],
+          _buildModule(_leftModules[i], themeColor, isMobile),
+          true,
+          themeColor,
+        ),
+      );
+      if (i < _leftModules.length - 1)
+        leftChildren.add(const SizedBox(height: 16));
     }
     leftChildren.add(_buildEmptyDropZone(true, themeColor));
 
     final List<Widget> rightChildren = [];
     for (int i = 0; i < _rightModules.length; i++) {
-      rightChildren.add(_wrapWithDraggable(_rightModules[i], _buildModule(_rightModules[i], themeColor, isMobile), false, themeColor));
-      if (i < _rightModules.length - 1) rightChildren.add(const SizedBox(height: 16));
+      rightChildren.add(
+        _wrapWithDraggable(
+          _rightModules[i],
+          _buildModule(_rightModules[i], themeColor, isMobile),
+          false,
+          themeColor,
+        ),
+      );
+      if (i < _rightModules.length - 1)
+        rightChildren.add(const SizedBox(height: 16));
     }
     rightChildren.add(_buildEmptyDropZone(false, themeColor));
 
     final List<Widget> mobileChildren = [];
     final List<String> combined = [..._leftModules, ..._rightModules];
     for (int i = 0; i < combined.length; i++) {
-      mobileChildren.add(_wrapWithDraggable(combined[i], _buildModule(combined[i], themeColor, isMobile), true, themeColor));
-      if (i < combined.length - 1) mobileChildren.add(const SizedBox(height: 16));
+      mobileChildren.add(
+        _wrapWithDraggable(
+          combined[i],
+          _buildModule(combined[i], themeColor, isMobile),
+          true,
+          themeColor,
+        ),
+      );
+      if (i < combined.length - 1)
+        mobileChildren.add(const SizedBox(height: 16));
     }
     mobileChildren.add(_buildEmptyDropZone(true, themeColor));
 
     // Statically lay out Metrics cards at the top
     final List<Widget> metricCards = [
-      _buildMetricCard("VOXEL RENDERER LOAD", "47.2 %", "120 FPS // STABLE", themeColor, Icons.speed_rounded),
+      _buildMetricCard(
+        "VOXEL RENDERER LOAD",
+        "47.2 %",
+        "120 FPS // STABLE",
+        themeColor,
+        Icons.speed_rounded,
+      ),
       if (isMobile) const SizedBox(height: 12) else const SizedBox(width: 16),
-      _buildMetricCard("DEVICE RAM USAGE", "${(state.ramUsagePercentage * 100).toInt()}%", "${state.usedRamGB.toStringAsFixed(1)} / ${state.totalRamGB.toStringAsFixed(1)} GB", themeColor, Icons.memory_rounded),
+      _buildMetricCard(
+        "DEVICE RAM USAGE",
+        "${(state.ramUsagePercentage * 100).toInt()}%",
+        "${state.usedRamGB.toStringAsFixed(1)} / ${state.totalRamGB.toStringAsFixed(1)} GB",
+        themeColor,
+        Icons.memory_rounded,
+      ),
       if (isMobile) const SizedBox(height: 12) else const SizedBox(width: 16),
-      _buildMetricCard("SYSTEM TEMPERATURE", "${state.realTimeTemperature.toStringAsFixed(1)}°C", state.hardwareStatusText, state.realTimeTemperature >= 38.0 ? Colors.amberAccent : themeColor, Icons.thermostat_rounded),
+      _buildMetricCard(
+        "SYSTEM TEMPERATURE",
+        "${state.realTimeTemperature.toStringAsFixed(1)}°C",
+        state.hardwareStatusText,
+        state.realTimeTemperature >= 38.0 ? Colors.amberAccent : themeColor,
+        Icons.thermostat_rounded,
+      ),
     ];
 
     final Widget metricsLayout = isMobile
         ? Column(children: metricCards)
         : Row(
-            children: metricCards.map((c) => c is SizedBox ? c : Expanded(child: c)).toList(),
+            children: metricCards
+                .map((c) => c is SizedBox ? c : Expanded(child: c))
+                .toList(),
           );
 
     final Widget bodyLayout = isMobile
@@ -420,14 +491,24 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text("DREAMENGINE CONSOLE", style: CyberTheme.titleStyle(fontSize: 18, color: Colors.white)),
+                    Text(
+                      "DREAMENGINE CONSOLE",
+                      style: CyberTheme.titleStyle(
+                        fontSize: 18,
+                        color: Colors.white,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Selector<EngineState, _HeaderData>(
-                      selector: (context, state) => _HeaderData(state.operatorName, state.operatorEmail),
+                      selector: (context, state) =>
+                          _HeaderData(state.operatorName, state.operatorEmail),
                       builder: (context, data, _) {
                         return Text(
                           "OPERATOR ID: ${data.name} // EMAIL: ${data.email}",
-                          style: CyberTheme.monospaceStyle(fontSize: 9, color: themeColor),
+                          style: CyberTheme.monospaceStyle(
+                            fontSize: 9,
+                            color: themeColor,
+                          ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         );
@@ -440,22 +521,48 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       children: [
                         // Edit hud button
                         InkWell(
-                          onTap: () => setState(() => _isCustomizing = !_isCustomizing),
+                          onTap: () =>
+                              setState(() => _isCustomizing = !_isCustomizing),
                           borderRadius: BorderRadius.circular(20),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 250),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
-                              color: _isCustomizing ? themeColor.withOpacity(0.12) : Colors.transparent,
-                              border: Border.all(color: _isCustomizing ? themeColor : Colors.white24),
+                              color: _isCustomizing
+                                  ? themeColor.withOpacity(0.12)
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: _isCustomizing
+                                    ? themeColor
+                                    : Colors.white24,
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(_isCustomizing ? Icons.dashboard_customize_rounded : Icons.edit_rounded, color: _isCustomizing ? themeColor : Colors.white70, size: 14),
+                                Icon(
+                                  _isCustomizing
+                                      ? Icons.dashboard_customize_rounded
+                                      : Icons.edit_rounded,
+                                  color: _isCustomizing
+                                      ? themeColor
+                                      : Colors.white70,
+                                  size: 14,
+                                ),
                                 const SizedBox(width: 6),
-                                Text(_isCustomizing ? "FINISH HUD" : "CUSTOMIZE HUD", style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white)),
+                                Text(
+                                  _isCustomizing
+                                      ? "FINISH HUD"
+                                      : "CUSTOMIZE HUD",
+                                  style: CyberTheme.monospaceStyle(
+                                    fontSize: 8,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -465,17 +572,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             onTap: _resetHUD,
                             borderRadius: BorderRadius.circular(20),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFFFF1E27)),
+                                border: Border.all(
+                                  color: const Color(0xFFFF1E27),
+                                ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.refresh_rounded, color: Color(0xFFFF1E27), size: 14),
+                                  const Icon(
+                                    Icons.refresh_rounded,
+                                    color: Color(0xFFFF1E27),
+                                    size: 14,
+                                  ),
                                   const SizedBox(width: 6),
-                                  Text("RESET HUD", style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white)),
+                                  Text(
+                                    "RESET HUD",
+                                    style: CyberTheme.monospaceStyle(
+                                      fontSize: 8,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -491,13 +613,25 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("DREAMENGINE CONSOLE", style: CyberTheme.titleStyle(fontSize: 22, color: Colors.white)),
+                          Text(
+                            "DREAMENGINE CONSOLE",
+                            style: CyberTheme.titleStyle(
+                              fontSize: 22,
+                              color: Colors.white,
+                            ),
+                          ),
                           Selector<EngineState, _HeaderData>(
-                            selector: (context, state) => _HeaderData(state.operatorName, state.operatorEmail),
+                            selector: (context, state) => _HeaderData(
+                              state.operatorName,
+                              state.operatorEmail,
+                            ),
                             builder: (context, data, _) {
                               return Text(
                                 "OPERATOR ID: ${data.name} // EMAIL: ${data.email}",
-                                style: CyberTheme.monospaceStyle(fontSize: 9, color: themeColor),
+                                style: CyberTheme.monospaceStyle(
+                                  fontSize: 9,
+                                  color: themeColor,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
                               );
@@ -513,21 +647,47 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       children: [
                         // Edit hud button
                         InkWell(
-                          onTap: () => setState(() => _isCustomizing = !_isCustomizing),
+                          onTap: () =>
+                              setState(() => _isCustomizing = !_isCustomizing),
                           borderRadius: BorderRadius.circular(20),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 250),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
-                              color: _isCustomizing ? themeColor.withOpacity(0.12) : Colors.transparent,
-                              border: Border.all(color: _isCustomizing ? themeColor : Colors.white24),
+                              color: _isCustomizing
+                                  ? themeColor.withOpacity(0.12)
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: _isCustomizing
+                                    ? themeColor
+                                    : Colors.white24,
+                              ),
                             ),
                             child: Row(
                               children: [
-                                Icon(_isCustomizing ? Icons.dashboard_customize_rounded : Icons.edit_rounded, color: _isCustomizing ? themeColor : Colors.white70, size: 14),
+                                Icon(
+                                  _isCustomizing
+                                      ? Icons.dashboard_customize_rounded
+                                      : Icons.edit_rounded,
+                                  color: _isCustomizing
+                                      ? themeColor
+                                      : Colors.white70,
+                                  size: 14,
+                                ),
                                 const SizedBox(width: 6),
-                                Text(_isCustomizing ? "FINISH HUD" : "CUSTOMIZE HUD", style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white)),
+                                Text(
+                                  _isCustomizing
+                                      ? "FINISH HUD"
+                                      : "CUSTOMIZE HUD",
+                                  style: CyberTheme.monospaceStyle(
+                                    fontSize: 8,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -538,16 +698,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             onTap: _resetHUD,
                             borderRadius: BorderRadius.circular(20),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFFFF1E27)),
+                                border: Border.all(
+                                  color: const Color(0xFFFF1E27),
+                                ),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.refresh_rounded, color: Color(0xFFFF1E27), size: 14),
+                                  const Icon(
+                                    Icons.refresh_rounded,
+                                    color: Color(0xFFFF1E27),
+                                    size: 14,
+                                  ),
                                   const SizedBox(width: 6),
-                                  Text("RESET HUD", style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white)),
+                                  Text(
+                                    "RESET HUD",
+                                    style: CyberTheme.monospaceStyle(
+                                      fontSize: 8,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -557,17 +732,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           const SizedBox(width: 12),
                           GlassContainer(
                             borderRadius: 8,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 6,
+                            ),
                             borderColor: themeColor.withOpacity(0.3),
                             child: Row(
                               children: [
                                 Container(
                                   width: 6,
                                   height: 6,
-                                  decoration: BoxDecoration(shape: BoxShape.circle, color: themeColor, boxShadow: CyberTheme.neonGlow(color: themeColor)),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: themeColor,
+                                    boxShadow: CyberTheme.neonGlow(
+                                      color: themeColor,
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
-                                Text("IMPELLER ACTIVE", style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white)),
+                                Text(
+                                  "IMPELLER ACTIVE",
+                                  style: CyberTheme.monospaceStyle(
+                                    fontSize: 9,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -584,15 +774,25 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               padding: const EdgeInsets.only(bottom: 16.0),
               child: GlassContainer(
                 borderColor: themeColor,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline_rounded, color: themeColor, size: 16),
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: themeColor,
+                      size: 16,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         "HUD EDIT PROTOCOL INITIATED: LONG PRESS AND DRAG CARDS TO RECONFIG COGNITIVE SEGMENTS.",
-                        style: CyberTheme.monospaceStyle(fontSize: 9, color: themeColor),
+                        style: CyberTheme.monospaceStyle(
+                          fontSize: 9,
+                          color: themeColor,
+                        ),
                       ),
                     ),
                   ],
@@ -611,7 +811,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   // --- Layout Helper Builders ---
 
-  Widget _buildMetricCard(String title, String val, String subtitle, Color themeColor, IconData icon) {
+  Widget _buildMetricCard(
+    String title,
+    String val,
+    String subtitle,
+    Color themeColor,
+    IconData icon,
+  ) {
     return GlassContainer(
       borderColor: themeColor.withOpacity(0.2),
       child: Row(
@@ -620,11 +826,29 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted)),
+                Text(
+                  title,
+                  style: CyberTheme.monospaceStyle(
+                    fontSize: 9,
+                    color: CyberTheme.textMuted,
+                  ),
+                ),
                 const SizedBox(height: 8),
-                Text(val, style: CyberTheme.titleStyle(fontSize: 22, color: Colors.white)),
+                Text(
+                  val,
+                  style: CyberTheme.titleStyle(
+                    fontSize: 22,
+                    color: Colors.white,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(subtitle, style: CyberTheme.monospaceStyle(fontSize: 9, color: themeColor)),
+                Text(
+                  subtitle,
+                  style: CyberTheme.monospaceStyle(
+                    fontSize: 9,
+                    color: themeColor,
+                  ),
+                ),
               ],
             ),
           ),
@@ -634,7 +858,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildProjectsLayout(EngineState state, Color themeColor, bool isMobile) {
+  Widget _buildProjectsLayout(
+    EngineState state,
+    Color themeColor,
+    bool isMobile,
+  ) {
     return GridView.count(
       crossAxisCount: isMobile ? 1 : 2,
       crossAxisSpacing: 16,
@@ -643,15 +871,45 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
-        _buildProjectCard(state.gameTitle, state.gameGenre, "PROCEDURAL SEED: ${state.proceduralSeed.toInt()}", themeColor, true),
-        _buildProjectCard("RETRO RUNNERS", "80s Outrun Racing", "SEED: 9812402 // COMPILED 2D", themeColor, false),
-        _buildProjectCard("CHRONO VOID", "Time-warp Stealth RPG", "SEED: 4182901 // BUILD READY", themeColor, false),
-        _buildProjectCard("AETHER WORLD", "Procedural Sandbox", "SEED: 8812904 // UNCOMPILED", themeColor, false),
+        _buildProjectCard(
+          state.gameTitle,
+          state.gameGenre,
+          "PROCEDURAL SEED: ${state.proceduralSeed.toInt()}",
+          themeColor,
+          true,
+        ),
+        _buildProjectCard(
+          "RETRO RUNNERS",
+          "80s Outrun Racing",
+          "SEED: 9812402 // COMPILED 2D",
+          themeColor,
+          false,
+        ),
+        _buildProjectCard(
+          "CHRONO VOID",
+          "Time-warp Stealth RPG",
+          "SEED: 4182901 // BUILD READY",
+          themeColor,
+          false,
+        ),
+        _buildProjectCard(
+          "AETHER WORLD",
+          "Procedural Sandbox",
+          "SEED: 8812904 // UNCOMPILED",
+          themeColor,
+          false,
+        ),
       ],
     );
   }
 
-  Widget _buildProjectCard(String title, String genre, String footer, Color themeColor, bool isActive) {
+  Widget _buildProjectCard(
+    String title,
+    String genre,
+    String footer,
+    Color themeColor,
+    bool isActive,
+  ) {
     final state = Provider.of<EngineState>(context, listen: false);
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -675,26 +933,50 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   Expanded(
                     child: Text(
                       title,
-                      style: CyberTheme.titleStyle(fontSize: 15, color: Colors.white),
+                      style: CyberTheme.titleStyle(
+                        fontSize: 15,
+                        color: Colors.white,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (isActive)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: themeColor.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: themeColor, width: 0.5),
                       ),
-                      child: Text("ACTIVE SEED", style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor)),
+                      child: Text(
+                        "ACTIVE SEED",
+                        style: CyberTheme.monospaceStyle(
+                          fontSize: 8,
+                          color: themeColor,
+                        ),
+                      ),
                     ),
                 ],
               ),
               const SizedBox(height: 4),
-              Text(genre, style: CyberTheme.bodyStyle(fontSize: 12, color: CyberTheme.textMuted)),
+              Text(
+                genre,
+                style: CyberTheme.bodyStyle(
+                  fontSize: 12,
+                  color: CyberTheme.textMuted,
+                ),
+              ),
               const Spacer(),
-              Text(footer, style: CyberTheme.monospaceStyle(fontSize: 9, color: isActive ? themeColor : CyberTheme.textMuted)),
+              Text(
+                footer,
+                style: CyberTheme.monospaceStyle(
+                  fontSize: 9,
+                  color: isActive ? themeColor : CyberTheme.textMuted,
+                ),
+              ),
             ],
           ),
         ),
@@ -709,28 +991,57 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text("SYSTEM OVERRIDES", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
+          Text(
+            "SYSTEM OVERRIDES",
+            style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
+          ),
           const SizedBox(height: 16),
-          _buildOverrideTile("RAYTRACING ENGINE", state.rayTracingEnabled ? "ON" : "OFF", () => state.toggleRayTracing(), state.rayTracingEnabled, themeColor),
-          _buildOverrideTile("DYNAMIC CLIMATE", state.weatherSystem, () {
-            final weathers = ["Neon Rain", "Solar Storm", "Acid Fog", "Clear Voxel"];
-            final currIndex = weathers.indexOf(state.weatherSystem);
-            final next = weathers[(currIndex + 1) % weathers.length];
-            state.setWeather(next);
-          }, true, themeColor),
+          _buildOverrideTile(
+            "RAYTRACING ENGINE",
+            state.rayTracingEnabled ? "ON" : "OFF",
+            () => state.toggleRayTracing(),
+            state.rayTracingEnabled,
+            themeColor,
+          ),
+          _buildOverrideTile(
+            "DYNAMIC CLIMATE",
+            state.weatherSystem,
+            () {
+              final weathers = [
+                "Neon Rain",
+                "Solar Storm",
+                "Acid Fog",
+                "Clear Voxel",
+              ];
+              final currIndex = weathers.indexOf(state.weatherSystem);
+              final next = weathers[(currIndex + 1) % weathers.length];
+              state.setWeather(next);
+            },
+            true,
+            themeColor,
+          ),
           const SizedBox(height: 20),
           NeonButton(
             onPressed: () => state.setScreenIndex(4),
             glowColor: themeColor,
             gradientColors: [themeColor, themeColor.withBlue(200).withRed(50)],
-            child: Text("COMPILE NEW SEED", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
+            child: Text(
+              "COMPILE NEW SEED",
+              style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildOverrideTile(String title, String val, VoidCallback onTap, bool isActive, Color themeColor) {
+  Widget _buildOverrideTile(
+    String title,
+    String val,
+    VoidCallback onTap,
+    bool isActive,
+    Color themeColor,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -745,14 +1056,30 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted)),
+              Text(
+                title,
+                style: CyberTheme.monospaceStyle(
+                  fontSize: 9,
+                  color: CyberTheme.textMuted,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text(val, style: CyberTheme.headingStyle(fontSize: 12, color: isActive ? themeColor : Colors.white)),
+              Text(
+                val,
+                style: CyberTheme.headingStyle(
+                  fontSize: 12,
+                  color: isActive ? themeColor : Colors.white,
+                ),
+              ),
             ],
           ),
           IconButton(
             onPressed: onTap,
-            icon: Icon(Icons.sync_rounded, color: isActive ? themeColor : CyberTheme.textMuted, size: 20),
+            icon: Icon(
+              Icons.sync_rounded,
+              color: isActive ? themeColor : CyberTheme.textMuted,
+              size: 20,
+            ),
           ),
         ],
       ),
@@ -771,7 +1098,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Expanded(
                 child: Text(
                   "LATEST GAME NEWS WIRE",
-                  style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
+                  style: CyberTheme.headingStyle(
+                    fontSize: 11,
+                    color: Colors.white,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -785,7 +1115,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               padding: const EdgeInsets.symmetric(vertical: 10.0),
               child: Text(
                 "CONNECTING DYNAMIC NEWS TRANSCEIVER...",
-                style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted),
+                style: CyberTheme.monospaceStyle(
+                  fontSize: 9,
+                  color: CyberTheme.textMuted,
+                ),
                 textAlign: TextAlign.center,
               ),
             )
@@ -803,8 +1136,22 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item["title"] ?? "", style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
-                            Text(item["pubDate"] ?? "", style: GoogleFonts.spaceGrotesk(fontSize: 8, color: CyberTheme.textMuted)),
+                            Text(
+                              item["title"] ?? "",
+                              style: CyberTheme.monospaceStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              item["pubDate"] ?? "",
+                              style: GoogleFonts.spaceGrotesk(
+                                fontSize: 8,
+                                color: CyberTheme.textMuted,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -816,8 +1163,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           const SizedBox(height: 10),
           OutlinedButton(
             onPressed: () => state.setScreenIndex(13),
-            style: OutlinedButton.styleFrom(side: BorderSide(color: themeColor.withOpacity(0.5))),
-            child: Text("OPEN NEWS TERMINAL", style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white)),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: themeColor.withOpacity(0.5)),
+            ),
+            child: Text(
+              "OPEN NEWS TERMINAL",
+              style: CyberTheme.monospaceStyle(
+                fontSize: 9,
+                color: Colors.white,
+              ),
+            ),
           ),
         ],
       ),
@@ -843,7 +1198,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Expanded(
                 child: Text(
                   "REGISTERED COGNITIVE DOSSIERS",
-                  style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
+                  style: CyberTheme.headingStyle(
+                    fontSize: 11,
+                    color: Colors.white,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -857,11 +1215,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: const Color(0xFF00FF88),
-                      boxShadow: [BoxShadow(color: const Color(0xFF00FF88).withOpacity(0.6), blurRadius: 4, spreadRadius: 1)],
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00FF88).withOpacity(0.6),
+                          blurRadius: 4,
+                          spreadRadius: 1,
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text("LIVE SYNCED", style: CyberTheme.monospaceStyle(fontSize: 8, color: const Color(0xFF00FF88))),
+                  Text(
+                    "LIVE SYNCED",
+                    style: CyberTheme.monospaceStyle(
+                      fontSize: 8,
+                      color: const Color(0xFF00FF88),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -883,7 +1253,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.02),
                   borderRadius: BorderRadius.circular(8),
@@ -894,26 +1267,62 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     CircleAvatar(
                       radius: 16,
                       backgroundColor: themeColor.withOpacity(0.12),
-                      child: Icon(avatarIcons[opAvatarIdx % avatarIcons.length], color: themeColor, size: 16),
+                      child: Icon(
+                        avatarIcons[opAvatarIdx % avatarIcons.length],
+                        color: themeColor,
+                        size: 16,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(opName, style: CyberTheme.monospaceStyle(fontSize: 11, color: Colors.white)),
-                          Text(opEmail, style: GoogleFonts.spaceGrotesk(fontSize: 9, color: CyberTheme.textMuted)),
+                          Text(
+                            opName,
+                            style: CyberTheme.monospaceStyle(
+                              fontSize: 11,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            opEmail,
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 9,
+                              color: CyberTheme.textMuted,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(opRole, style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor)),
+                        Text(
+                          opRole,
+                          style: CyberTheme.monospaceStyle(
+                            fontSize: 8,
+                            color: themeColor,
+                          ),
+                        ),
                         Row(
                           children: [
-                            Text("$opPing • ", style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white30)),
-                            Text(opStatus, style: CyberTheme.monospaceStyle(fontSize: 8, color: isOnline ? const Color(0xFF00FF88) : Colors.amber)),
+                            Text(
+                              "$opPing • ",
+                              style: CyberTheme.monospaceStyle(
+                                fontSize: 8,
+                                color: Colors.white30,
+                              ),
+                            ),
+                            Text(
+                              opStatus,
+                              style: CyberTheme.monospaceStyle(
+                                fontSize: 8,
+                                color: isOnline
+                                    ? const Color(0xFF00FF88)
+                                    : Colors.amber,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -940,7 +1349,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Expanded(
                 child: Text(
                   "DEVGRAM SOCIAL OVERVIEW",
-                  style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
+                  style: CyberTheme.headingStyle(
+                    fontSize: 11,
+                    color: Colors.white,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -954,7 +1366,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               padding: const EdgeInsets.symmetric(vertical: 10.0),
               child: Text(
                 "SYNCING DEVGRAM FEED NODES...",
-                style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted),
+                style: CyberTheme.monospaceStyle(
+                  fontSize: 9,
+                  color: CyberTheme.textMuted,
+                ),
                 textAlign: TextAlign.center,
               ),
             )
@@ -967,12 +1382,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   padding: const EdgeInsets.only(bottom: 8.0),
                   child: Row(
                     children: [
-                      Icon(Icons.alternate_email_rounded, size: 12, color: themeColor),
+                      Icon(
+                        Icons.alternate_email_rounded,
+                        size: 12,
+                        color: themeColor,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           "$author: $caption",
-                          style: CyberTheme.bodyStyle(fontSize: 10, color: CyberTheme.textMain),
+                          style: CyberTheme.bodyStyle(
+                            fontSize: 10,
+                            color: CyberTheme.textMain,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -987,7 +1409,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             onPressed: () => state.setScreenIndex(12),
             glowColor: themeColor,
             gradientColors: [themeColor, themeColor.withOpacity(0.5)],
-            child: Text("LAUNCH DEVGRAM HOLOGRAPH", style: CyberTheme.headingStyle(fontSize: 10, color: Colors.white)),
+            child: Text(
+              "LAUNCH DEVGRAM HOLOGRAPH",
+              style: CyberTheme.headingStyle(fontSize: 10, color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -1000,7 +1425,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("VOXEL COMPILATION FREQUENCY", style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white)),
+          Text(
+            "VOXEL COMPILATION FREQUENCY",
+            style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
+          ),
           const SizedBox(height: 12),
           SizedBox(
             height: 60,
@@ -1009,7 +1437,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 animation: _visualizerController,
                 builder: (context, _) {
                   return CustomPaint(
-                    painter: PerformanceWavePainter(progress: _visualizerController.value, color: themeColor),
+                    painter: PerformanceWavePainter(
+                      progress: _visualizerController.value,
+                      color: themeColor,
+                    ),
                     child: Container(),
                   );
                 },
@@ -1023,7 +1454,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Flexible(
                 child: Text(
                   "CORE TEMP: 62°C",
-                  style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted),
+                  style: CyberTheme.monospaceStyle(
+                    fontSize: 9,
+                    color: CyberTheme.textMuted,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -1031,7 +1465,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Flexible(
                 child: Text(
                   "VRAM ALLOC: 5.4GB / 8GB",
-                  style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted),
+                  style: CyberTheme.monospaceStyle(
+                    fontSize: 9,
+                    color: CyberTheme.textMuted,
+                  ),
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.end,
                 ),
@@ -1055,12 +1492,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Expanded(
                 child: Text(
                   "OPERATOR SYSTEM CONSOLE",
-                  style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
+                  style: CyberTheme.headingStyle(
+                    fontSize: 11,
+                    color: Colors.white,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(Icons.keyboard_arrow_right_rounded, color: Colors.white30, size: 16),
+              const Icon(
+                Icons.keyboard_arrow_right_rounded,
+                color: Colors.white30,
+                size: 16,
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -1074,7 +1518,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   padding: const EdgeInsets.only(bottom: 6.0),
                   child: Text(
                     "> ${_terminalLogs[idx]}",
-                    style: CyberTheme.monospaceStyle(fontSize: 10, color: CyberTheme.cyanGlow.withOpacity(0.85)),
+                    style: CyberTheme.monospaceStyle(
+                      fontSize: 10,
+                      color: CyberTheme.cyanGlow.withOpacity(0.85),
+                    ),
                   ),
                 );
               },
@@ -1124,11 +1571,13 @@ class PerformanceWavePainter extends CustomPainter {
         linePath.lineTo(x, y);
       }
     }
-    
+
     // Ensure smooth connection to exactly the right boundary
     final double endX = size.width;
-    final double angle1 = (endX / size.width * 2 * pi * 2.2) + progress * 2 * pi;
-    final double angle2 = (endX / size.width * 2 * pi * 1.1) - progress * 2 * pi;
+    final double angle1 =
+        (endX / size.width * 2 * pi * 2.2) + progress * 2 * pi;
+    final double angle2 =
+        (endX / size.width * 2 * pi * 1.1) - progress * 2 * pi;
     final double endY = size.height / 2 + sin(angle1) * 12 + cos(angle2) * 6;
     path.lineTo(endX, endY);
     linePath.lineTo(endX, endY);

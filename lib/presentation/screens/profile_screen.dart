@@ -427,6 +427,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 yaw: currentYaw,
                                 pitch: _avatarPitch,
                                 color: themeColor,
+                                avatarIndex: data.selectedAvatarIndex,
                               ),
                             ),
                           );
@@ -561,13 +562,19 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 }
 
-// CustomPainter to draw a 3D rotating cyber-head/sphere model using vector projection math!
+// CustomPainter to draw a dynamic 3D wireframe mesh based on the selected avatar type using vector projection math!
 class Avatar3DPainter extends CustomPainter {
   final double yaw;
   final double pitch;
   final Color color;
+  final int avatarIndex;
 
-  Avatar3DPainter({required this.yaw, required this.pitch, required this.color});
+  Avatar3DPainter({
+    required this.yaw,
+    required this.pitch,
+    required this.color,
+    required this.avatarIndex,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -581,49 +588,228 @@ class Avatar3DPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.fill;
 
-    // Define 3D points representing a cyber sphere (latitude / longitude grid)
-    final List<List<double>> points3D = [];
-    final int latCount = 6;
-    final int lonCount = 10;
     final double radius = min(size.width, size.height) * 0.32;
+    final List<List<double>> points3D = [];
+    final List<List<int>> edges = [];
 
-    for (int lat = 0; lat <= latCount; lat++) {
-      final double latAngle = (lat * pi) / latCount;
-      for (int lon = 0; lon < lonCount; lon++) {
-        final double lonAngle = (lon * 2 * pi) / lonCount;
+    if (avatarIndex == 0) {
+      // 1. Cyber Core (3D Tesseract / Hypercube mesh)
+      final double R = radius * 0.8;
+      // Vertices 0-7: Outer Cube
+      for (int x = -1; x <= 1; x += 2) {
+        for (int y = -1; y <= 1; y += 2) {
+          for (int z = -1; z <= 1; z += 2) {
+            points3D.add([x * R, y * R, z * R]);
+          }
+        }
+      }
+      // Vertices 8-15: Inner Cube
+      for (int x = -1; x <= 1; x += 2) {
+        for (int y = -1; y <= 1; y += 2) {
+          for (int z = -1; z <= 1; z += 2) {
+            points3D.add([x * R * 0.45, y * R * 0.45, z * R * 0.45]);
+          }
+        }
+      }
+      // Connect outer cube edges
+      for (int i = 0; i < 8; i++) {
+        for (int j = i + 1; j < 8; j++) {
+          int diff = 0;
+          for (int k = 0; k < 3; k++) {
+            if (points3D[i][k] != points3D[j][k]) diff++;
+          }
+          if (diff == 1) edges.add([i, j]);
+        }
+      }
+      // Connect inner cube edges
+      for (int i = 0; i < 8; i++) {
+        for (int j = i + 1; j < 8; j++) {
+          int diff = 0;
+          for (int k = 0; k < 3; k++) {
+            if ((points3D[i + 8][k] / 0.45) != (points3D[j + 8][k] / 0.45)) diff++;
+          }
+          if (diff == 1) edges.add([i + 8, j + 8]);
+        }
+      }
+      // Connect corresponding outer & inner corners
+      for (int i = 0; i < 8; i++) {
+        edges.add([i, i + 8]);
+      }
+    } else if (avatarIndex == 1) {
+      // 2. Vesper Net (3D Torus Ring Topology)
+      final double R_torus = radius * 0.8;
+      final double r_torus = radius * 0.28;
+      final int latCount = 8;
+      final int lonCount = 14;
 
-        // Spherical to Cartesian coordinates conversion
-        final double x = radius * sin(latAngle) * cos(lonAngle);
-        final double y = radius * cos(latAngle);
-        final double z = radius * sin(latAngle) * sin(lonAngle);
+      for (int lat = 0; lat < latCount; lat++) {
+        final double u = (lat * 2 * pi) / latCount;
+        for (int lon = 0; lon < lonCount; lon++) {
+          final double v = (lon * 2 * pi) / lonCount;
+          final double x = (R_torus + r_torus * cos(u)) * cos(v);
+          final double y = r_torus * sin(u);
+          final double z = (R_torus + r_torus * cos(u)) * sin(v);
+          points3D.add([x, y, z]);
+        }
+      }
+      // Connect torus edges
+      for (int lat = 0; lat < latCount; lat++) {
+        for (int lon = 0; lon < lonCount; lon++) {
+          final int idx = lat * lonCount + lon;
+          final int nextLonIdx = lat * lonCount + ((lon + 1) % lonCount);
+          final int nextLatIdx = ((lat + 1) % latCount) * lonCount + lon;
+          edges.add([idx, nextLonIdx]);
+          edges.add([idx, nextLatIdx]);
+        }
+      }
+    } else if (avatarIndex == 2) {
+      // 3. Tactical Drone (Double-pyramid octahedron core with rotor arms and blade frames)
+      final double R = radius;
+      // Core body
+      points3D.add([0, R * 0.6, 0]);   // 0: Top
+      points3D.add([0, -R * 0.6, 0]);  // 1: Bottom
+      points3D.add([R * 0.35, 0, 0]);  // 2: Front
+      points3D.add([-R * 0.35, 0, 0]); // 3: Back
+      points3D.add([0, 0, R * 0.35]);  // 4: Right
+      points3D.add([0, 0, -R * 0.35]); // 5: Left
 
-        points3D.add([x, y, z]);
+      edges.addAll([
+        [0, 2], [0, 3], [0, 4], [0, 5],
+        [1, 2], [1, 3], [1, 4], [1, 5],
+        [2, 4], [4, 3], [3, 5], [5, 2]
+      ]);
+
+      // Rotor Arm Tips
+      points3D.add([R * 0.85, R * 0.1, R * 0.85]);   // 6: Front Right
+      points3D.add([-R * 0.85, R * 0.1, R * 0.85]);  // 7: Back Right
+      points3D.add([-R * 0.85, R * 0.1, -R * 0.85]); // 8: Back Left
+      points3D.add([R * 0.85, R * 0.1, -R * 0.85]);  // 9: Front Left
+
+      edges.addAll([[4, 6], [3, 7], [5, 8], [2, 9]]);
+
+      // Rotor ring coordinates
+      int startIdx = 10;
+      for (int arm = 0; arm < 4; arm++) {
+        final double ax = points3D[6 + arm][0];
+        final double ay = points3D[6 + arm][1];
+        final double az = points3D[6 + arm][2];
+
+        for (int b = 0; b < 4; b++) {
+          final double bx = ax + R * 0.22 * cos(b * pi / 2);
+          final double bz = az + R * 0.22 * sin(b * pi / 2);
+          points3D.add([bx, ay, bz]);
+        }
+
+        final int c0 = startIdx + arm * 4;
+        edges.addAll([
+          [6 + arm, c0], [6 + arm, c0 + 1], [6 + arm, c0 + 2], [6 + arm, c0 + 3],
+          [c0, c0 + 1], [c0 + 1, c0 + 2], [c0 + 2, c0 + 3], [c0 + 3, c0]
+        ]);
+      }
+    } else {
+      // 4. Aegis Pilot (Cyber-Helmet mesh with visor plate cut-out)
+      final double R = radius;
+      final int latCount = 5;
+      final int lonCount = 8;
+
+      for (int lat = 0; lat <= latCount; lat++) {
+        final double latAngle = (lat * pi) / (latCount + 1);
+        for (int lon = 0; lon < lonCount; lon++) {
+          final double lonAngle = (lon * 2 * pi) / lonCount;
+          final double x = R * 0.75 * sin(latAngle) * cos(lonAngle);
+          final double y = R * 0.85 * cos(latAngle);
+          final double z = R * 0.75 * sin(latAngle) * sin(lonAngle);
+
+          // Visor front cut-out to make it a helmet shell
+          final bool isFrontVisorArea = (z > R * 0.3 && y > -R * 0.3 && y < R * 0.3 && x > -R * 0.5 && x < R * 0.5);
+          if (!isFrontVisorArea) {
+            points3D.add([x, y, z]);
+          }
+        }
+      }
+
+      // Visor shield panel front vertices
+      final int visorStartIdx = points3D.length;
+      points3D.addAll([
+        [-R * 0.45, R * 0.25, R * 0.65],  // Top Left Visor
+        [R * 0.45, R * 0.25, R * 0.65],   // Top Right Visor
+        [R * 0.45, -R * 0.28, R * 0.65],  // Bottom Right Visor
+        [-R * 0.45, -R * 0.28, R * 0.65], // Bottom Left Visor
+        [0.0, R * 0.35, R * 0.72],        // Visor Peak Crest
+        [0.0, -R * 0.38, R * 0.72],       // Visor Chin Point
+      ]);
+
+      // Connect visor visor
+      edges.addAll([
+        [visorStartIdx, visorStartIdx + 1],
+        [visorStartIdx + 1, visorStartIdx + 2],
+        [visorStartIdx + 2, visorStartIdx + 3],
+        [visorStartIdx + 3, visorStartIdx],
+        [visorStartIdx, visorStartIdx + 4],
+        [visorStartIdx + 1, visorStartIdx + 4],
+        [visorStartIdx + 2, visorStartIdx + 5],
+        [visorStartIdx + 3, visorStartIdx + 5],
+        [visorStartIdx + 4, visorStartIdx + 5],
+      ]);
+
+      // Connect skull dome vertices using proximity-based neighboring
+      for (int i = 0; i < visorStartIdx; i++) {
+        for (int j = i + 1; j < visorStartIdx; j++) {
+          final double dx = points3D[i][0] - points3D[j][0];
+          final double dy = points3D[i][1] - points3D[j][1];
+          final double dz = points3D[i][2] - points3D[j][2];
+          final double dist = sqrt(dx * dx + dy * dy + dz * dz);
+          if (dist > R * 0.1 && dist < R * 0.48) {
+            edges.add([i, j]);
+          }
+        }
+      }
+
+      // Connect visor frame to nearby helmet body points
+      for (int v = 0; v < 6; v++) {
+        final int vIdx = visorStartIdx + v;
+        double minDist = double.infinity;
+        int nearestIdx = -1;
+
+        for (int i = 0; i < visorStartIdx; i++) {
+          final double dx = points3D[vIdx][0] - points3D[i][0];
+          final double dy = points3D[vIdx][1] - points3D[i][1];
+          final double dz = points3D[vIdx][2] - points3D[i][2];
+          final double dist = sqrt(dx * dx + dy * dy + dz * dz);
+          if (dist < minDist) {
+            minDist = dist;
+            nearestIdx = i;
+          }
+        }
+        if (nearestIdx != -1) {
+          edges.add([vIdx, nearestIdx]);
+        }
       }
     }
 
-    // 3D rotation math using trigonometric matrices (yaw & pitch)
+    // 3D vector rotation projection (yaw & pitch rotation matrices)
     final double cosYaw = cos(yaw);
     final double sinYaw = sin(yaw);
     final double cosPitch = cos(pitch);
     final double sinPitch = sin(pitch);
 
     final List<Offset> points2D = [];
-    final List<double> depths = []; // For simple depth rendering cues
+    final List<double> depths = [];
 
     for (var pt in points3D) {
-      double x = pt[0];
-      double y = pt[1];
-      double z = pt[2];
+      final double x = pt[0];
+      final double y = pt[1];
+      final double z = pt[2];
 
-      // Rotate around Y-axis (Yaw)
-      double rx1 = x * cosYaw - z * sinYaw;
-      double rz1 = x * sinYaw + z * cosYaw;
+      // Yaw rotation (Y-axis)
+      final double rx1 = x * cosYaw - z * sinYaw;
+      final double rz1 = x * sinYaw + z * cosYaw;
 
-      // Rotate around X-axis (Pitch)
-      double ry2 = y * cosPitch - rz1 * sinPitch;
-      double rz2 = y * sinPitch + rz1 * cosPitch;
+      // Pitch rotation (X-axis)
+      final double ry2 = y * cosPitch - rz1 * sinPitch;
+      final double rz2 = y * sinPitch + rz1 * cosPitch;
 
-      // Perspective divide projection
+      // Perspective scale division
       final double cameraDist = radius * 2.5;
       final double focalLength = radius * 2.2;
       final double scale = focalLength / (rz2 + cameraDist);
@@ -635,45 +821,29 @@ class Avatar3DPainter extends CustomPainter {
       depths.add(rz2);
     }
 
-    // Draw grid connections (Lines between neighbors in the mesh)
-    for (int lat = 0; lat <= latCount; lat++) {
-      for (int lon = 0; lon < lonCount; lon++) {
-        final int idx = lat * lonCount + lon;
-        final int nextLonIdx = lat * lonCount + ((lon + 1) % lonCount);
-        final int nextLatIdx = (lat + 1) * lonCount + lon;
+    // Draw projected connecting lines
+    for (var edge in edges) {
+      final int i = edge[0];
+      final int j = edge[1];
 
-        // Draw horizontal ring line
-        if (idx < points2D.length && nextLonIdx < points2D.length) {
-          // Adjust opacity based on depth to create a gorgeous 3D volumetric effect!
-          final double avgDepth = (depths[idx] + depths[nextLonIdx]) / 2;
-          final double opacity = ((avgDepth + radius) / (2 * radius)).clamp(0.08, 0.7);
-          canvas.drawLine(
-            points2D[idx],
-            points2D[nextLonIdx],
-            paint..color = color.withOpacity(opacity),
-          );
-        }
-
-        // Draw vertical longitudinal line
-        if (lat < latCount && idx < points2D.length && nextLatIdx < points2D.length) {
-          final double avgDepth = (depths[idx] + depths[nextLatIdx]) / 2;
-          final double opacity = ((avgDepth + radius) / (2 * radius)).clamp(0.08, 0.7);
-          canvas.drawLine(
-            points2D[idx],
-            points2D[nextLatIdx],
-            paint..color = color.withOpacity(opacity),
-          );
-        }
+      if (i < points2D.length && j < points2D.length) {
+        final double avgDepth = (depths[i] + depths[j]) / 2;
+        final double opacity = ((avgDepth + radius) / (2 * radius)).clamp(0.08, 0.75);
+        canvas.drawLine(
+          points2D[i],
+          points2D[j],
+          paint..color = color.withOpacity(opacity),
+        );
       }
     }
 
-    // Draw vertex dots
+    // Draw vertex node dots
     for (int i = 0; i < points2D.length; i++) {
       final double depth = depths[i];
-      final double opacity = ((depth + radius) / (2 * radius)).clamp(0.1, 0.85);
+      final double opacity = ((depth + radius) / (2 * radius)).clamp(0.1, 0.9);
       canvas.drawCircle(
         points2D[i],
-        2 + (opacity * 2.5),
+        1.5 + (opacity * 2.0),
         nodePaint..color = color.withOpacity(opacity),
       );
     }

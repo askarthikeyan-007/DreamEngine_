@@ -344,20 +344,27 @@ class _GamePreviewScreenState extends State<GamePreviewScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              npc.name.toUpperCase(),
-                              style: CyberTheme.headingStyle(fontSize: 13, color: themeColor),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: themeColor.withOpacity(0.08),
-                                border: Border.all(color: themeColor.withOpacity(0.3)),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
+                            Expanded(
                               child: Text(
-                                "${npc.role.toUpperCase()} // ${npc.emotion.toUpperCase()}",
-                                style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white70),
+                                npc.name.toUpperCase(),
+                                style: CyberTheme.headingStyle(fontSize: 13, color: themeColor),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: themeColor.withOpacity(0.08),
+                                  border: Border.all(color: themeColor.withOpacity(0.3)),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  "${npc.role.toUpperCase()} // ${npc.emotion.toUpperCase()}",
+                                  style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white70),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
                           ],
@@ -426,16 +433,26 @@ class _GamePreviewScreenState extends State<GamePreviewScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("GENERATED GAME BLUEPRINT", style: CyberTheme.titleStyle(fontSize: 22)),
-                      Text(
-                        "ACTIVE COMPILE SUMMARY // ENCRYPTED IN CORE MODULES",
-                        style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
-                      ),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "GENERATED GAME BLUEPRINT",
+                          style: CyberTheme.titleStyle(fontSize: 20),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          "ACTIVE COMPILE SUMMARY // ENCRYPTED IN CORE MODULES",
+                          style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   IconButton(
                     onPressed: () => state.setScreenIndex(5), // Go back to rendering
                     icon: const Icon(Icons.arrow_back_rounded, color: Colors.white70),
@@ -465,7 +482,15 @@ class _GamePreviewScreenState extends State<GamePreviewScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(key, style: CyberTheme.monospaceStyle(fontSize: 11, color: CyberTheme.textMuted)),
-          Text(val, style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              val,
+              style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
@@ -1082,10 +1107,15 @@ public class VesperNetrunner : MonoBehaviour {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "DYNAMIC ENGINE SOURCE INSPECTOR",
-                style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
+              Expanded(
+                child: Text(
+                  "DYNAMIC ENGINE SOURCE INSPECTOR",
+                  style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              const SizedBox(width: 8),
               const Icon(Icons.code_rounded, color: Colors.white30, size: 16),
             ],
           ),
@@ -1143,16 +1173,19 @@ public class VesperNetrunner : MonoBehaviour {
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(color: themeColor.withOpacity(0.4)),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.copy_rounded, color: Colors.white70, size: 12),
-                        const SizedBox(width: 6),
-                        Text(
-                          "COPY CODE",
-                          style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
-                        ),
-                      ],
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.copy_rounded, color: Colors.white70, size: 12),
+                          const SizedBox(width: 6),
+                          Text(
+                            "COPY CODE",
+                            style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1179,16 +1212,19 @@ public class VesperNetrunner : MonoBehaviour {
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(color: themeColor.withOpacity(0.4)),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.download_rounded, color: Colors.white70, size: 12),
-                        const SizedBox(width: 6),
-                        Text(
-                          "DOWNLOAD FILE",
-                          style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
-                        ),
-                      ],
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.download_rounded, color: Colors.white70, size: 12),
+                          const SizedBox(width: 6),
+                          Text(
+                            "DOWNLOAD FILE",
+                            style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1412,9 +1448,12 @@ class _APKDeployerSection extends StatelessWidget {
                         },
                         glowColor: themeColor,
                         gradientColors: [themeColor, themeColor.withBlue(210).withRed(40)],
-                        child: Text(
-                          "DOWNLOAD APK",
-                          style: CyberTheme.headingStyle(fontSize: 10, color: Colors.white),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            "DOWNLOAD APK",
+                            style: CyberTheme.headingStyle(fontSize: 10, color: Colors.white),
+                          ),
                         ),
                       ),
                     ),
@@ -1447,11 +1486,14 @@ class _APKDeployerSection extends StatelessWidget {
                                       ? Colors.greenAccent.withOpacity(0.12)
                                       : Colors.transparent,
                                 ),
-                                child: Text(
-                                  data.gameInstalled ? "RUN GAME" : "INSTALL IN LAUNCHER",
-                                  style: CyberTheme.monospaceStyle(
-                                    fontSize: 9,
-                                    color: data.gameInstalled ? Colors.greenAccent : Colors.white,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    data.gameInstalled ? "RUN GAME" : "INSTALL IN LAUNCHER",
+                                    style: CyberTheme.monospaceStyle(
+                                      fontSize: 9,
+                                      color: data.gameInstalled ? Colors.greenAccent : Colors.white,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1780,17 +1822,29 @@ class _SimulatorSection extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("PHYSICS SIMULATION: VEHICLE", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
-                  border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
-                  borderRadius: BorderRadius.circular(4),
-                ),
+              Expanded(
                 child: Text(
-                  "TICKING // 30 FPS",
-                  style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.redAccent),
+                  "PHYSICS SIMULATION: VEHICLE",
+                  style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.1),
+                    border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    "TICKING // 30 FPS",
+                    style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.redAccent),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],
@@ -1904,12 +1958,24 @@ class _SimulatorSection extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("RUNNER ARCADE CORE", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
-              Text(
-                data.runnerGameOver ? "COLLIDED // HALTED" : "RUNNING // MULT: ${state.runnerSpeedMult.toStringAsFixed(2)}x",
-                style: CyberTheme.monospaceStyle(
-                  fontSize: 8,
-                  color: data.runnerGameOver ? Colors.redAccent : Colors.greenAccent,
+              Expanded(
+                child: Text(
+                  "RUNNER ARCADE CORE",
+                  style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  data.runnerGameOver ? "COLLIDED // HALTED" : "RUNNING // MULT: ${state.runnerSpeedMult.toStringAsFixed(2)}x",
+                  style: CyberTheme.monospaceStyle(
+                    fontSize: 8,
+                    color: data.runnerGameOver ? Colors.redAccent : Colors.greenAccent,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -1979,9 +2045,12 @@ class _SimulatorSection extends StatelessWidget {
                     onPressed: () => state.toggleRunnerHoverboard(),
                     glowColor: Colors.cyanAccent,
                     gradientColors: [Colors.cyan.shade900, Colors.cyan],
-                    child: Text(
-                      data.runnerHoverboard ? "BOARD ON" : "DEPLOY BOARD",
-                      style: CyberTheme.headingStyle(fontSize: 9, color: Colors.white),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        data.runnerHoverboard ? "BOARD ON" : "DEPLOY BOARD",
+                        style: CyberTheme.headingStyle(fontSize: 9, color: Colors.white),
+                      ),
                     ),
                   ),
                 ),
@@ -2019,19 +2088,31 @@ class _SimulatorSection extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("PHYSICS & LIGHT SIMULATION: ATMOSPHERIC", style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: data.platformerState == "Spotted" ? Colors.redAccent.withOpacity(0.1) : Colors.greenAccent.withOpacity(0.1),
-                  border: Border.all(color: data.platformerState == "Spotted" ? Colors.redAccent.withOpacity(0.3) : Colors.greenAccent.withOpacity(0.3)),
-                  borderRadius: BorderRadius.circular(4),
-                ),
+              Expanded(
                 child: Text(
-                  data.platformerState.toUpperCase(),
-                  style: CyberTheme.monospaceStyle(
-                    fontSize: 8,
-                    color: data.platformerState == "Spotted" ? Colors.redAccent : Colors.greenAccent,
+                  "PHYSICS & LIGHT SIMULATION: ATMOSPHERIC",
+                  style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: data.platformerState == "Spotted" ? Colors.redAccent.withOpacity(0.1) : Colors.greenAccent.withOpacity(0.1),
+                    border: Border.all(color: data.platformerState == "Spotted" ? Colors.redAccent.withOpacity(0.3) : Colors.greenAccent.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    data.platformerState.toUpperCase(),
+                    style: CyberTheme.monospaceStyle(
+                      fontSize: 8,
+                      color: data.platformerState == "Spotted" ? Colors.redAccent : Colors.greenAccent,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
@@ -2122,11 +2203,14 @@ class _SimulatorSection extends StatelessWidget {
                       backgroundColor: data.platformerState == "Hiding" ? Colors.greenAccent.withOpacity(0.12) : Colors.transparent,
                       fixedSize: const Size.fromHeight(40),
                     ),
-                    child: Text(
-                      data.platformerState == "Hiding" ? "HIDING IN SHADOW" : "CROUCH / HIDE",
-                      style: CyberTheme.monospaceStyle(
-                        fontSize: 9,
-                        color: data.platformerState == "Hiding" ? Colors.greenAccent : Colors.white,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        data.platformerState == "Hiding" ? "HIDING IN SHADOW" : "CROUCH / HIDE",
+                        style: CyberTheme.monospaceStyle(
+                          fontSize: 9,
+                          color: data.platformerState == "Hiding" ? Colors.greenAccent : Colors.white,
+                        ),
                       ),
                     ),
                   ),
@@ -2156,7 +2240,15 @@ class _SimulatorSection extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("COMPILER HARDWARE DIAGNOSTICS", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
+              Expanded(
+                child: Text(
+                  "COMPILER HARDWARE DIAGNOSTICS",
+                  style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               Icon(Icons.query_stats_rounded, color: themeColor, size: 16),
             ],
           ),
@@ -2185,11 +2277,14 @@ class _SimulatorSection extends StatelessWidget {
                     side: BorderSide(color: state.rayTracingEnabled ? themeColor : Colors.white10),
                     backgroundColor: state.rayTracingEnabled ? themeColor.withOpacity(0.08) : Colors.transparent,
                   ),
-                  child: Text(
-                    "RAY-TRACING",
-                    style: CyberTheme.monospaceStyle(
-                      fontSize: 9,
-                      color: state.rayTracingEnabled ? Colors.white : CyberTheme.textMuted,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "RAY-TRACING",
+                      style: CyberTheme.monospaceStyle(
+                        fontSize: 9,
+                        color: state.rayTracingEnabled ? Colors.white : CyberTheme.textMuted,
+                      ),
                     ),
                   ),
                 ),
@@ -2211,9 +2306,12 @@ class _SimulatorSection extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.white10),
                   ),
-                  child: Text(
-                    "PERF PROFILE",
-                    style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "PERF PROFILE",
+                      style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
+                    ),
                   ),
                 ),
               ),
@@ -2225,13 +2323,27 @@ class _SimulatorSection extends StatelessWidget {
   }
 
   Widget _buildTelemetryIndicator(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted)),
-        const SizedBox(height: 4),
-        Text(value, style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white)),
-      ],
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2245,6 +2357,8 @@ class _SimulatorSection extends StatelessWidget {
             child: Text(
               label,
               style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           Expanded(
@@ -2286,14 +2400,24 @@ class _SimulatorSection extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
+            flex: 3,
             child: Text(
               label,
               style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
-          Text(
-            val,
-            style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
+          const SizedBox(width: 4),
+          Flexible(
+            flex: 3,
+            child: Text(
+              val,
+              style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.right,
+            ),
           ),
           const SizedBox(width: 8),
           Text(
@@ -2302,6 +2426,8 @@ class _SimulatorSection extends StatelessWidget {
               fontSize: 8,
               color: status == "OPTIMIZED" || status == "STABLE" || status == "EFFICIENT" ? Colors.greenAccent : Colors.amberAccent,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

@@ -304,16 +304,26 @@ class _RealtimeRenderViewState extends State<RealtimeRenderView>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("REALTIME RENDERING VIEWPORT", style: CyberTheme.titleStyle(fontSize: 22)),
-                            Text(
-                              "COMPILE SEED: ${data.proceduralSeed.toInt()} // PIPELINE: IMPELLER HW-ACCEL",
-                              style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
-                            ),
-                          ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "REALTIME RENDERING VIEWPORT",
+                                style: CyberTheme.titleStyle(fontSize: 22),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                "COMPILE SEED: ${data.proceduralSeed.toInt()} // PIPELINE: IMPELLER HW-ACCEL",
+                                style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Row(
                           children: [
                             _buildToggleHeader("RAY-TRACING", data.rayTracingEnabled, themeColor),

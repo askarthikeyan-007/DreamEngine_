@@ -423,6 +423,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> with SingleTicker
                             width: 100,
                             height: 100,
                             fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              width: 100,
+                              height: 100,
+                              color: Colors.white.withOpacity(0.05),
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.broken_image, size: 24, color: Colors.white24),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 16),

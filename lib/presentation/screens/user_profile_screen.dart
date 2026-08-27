@@ -73,6 +73,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       Image.network(
                         post["imageUrl"],
                         fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          height: 200,
+                          color: Colors.white.withOpacity(0.05),
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.broken_image, color: Colors.white24, size: 32),
+                        ),
                       ),
 
                     // Caption
@@ -339,7 +345,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(7),
                         child: imageUrl.isNotEmpty
-                            ? Image.network(imageUrl, fit: BoxFit.cover)
+                            ? Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  color: Colors.white.withOpacity(0.02),
+                                  child: Center(
+                                    child: Icon(Icons.broken_image_rounded, color: themeColor.withOpacity(0.4)),
+                                  ),
+                                ),
+                              )
                             : Container(
                                 color: Colors.white.withOpacity(0.02),
                                 child: Center(

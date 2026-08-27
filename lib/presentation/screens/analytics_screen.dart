@@ -143,10 +143,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "REALTIME PERFORMANCE TELEMETRY WAVEFORMS",
-                style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
+              Expanded(
+                child: Text(
+                  "REALTIME PERFORMANCE TELEMETRY WAVEFORMS",
+                  style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
@@ -205,16 +210,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
             },
             glowColor: themeColor,
             gradientColors: [themeColor, themeColor.withBlue(220).withRed(40)],
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.bolt_rounded, color: Colors.white, size: 16),
-                const SizedBox(width: 8),
-                Text(
-                  state.isPurgingHardware ? "OPTIMIZING HARDWARE METRICS..." : "BOOST VRAM & COOL DOWN",
-                  style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
-                ),
-              ],
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.bolt_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    state.isPurgingHardware ? "OPTIMIZING HARDWARE METRICS..." : "BOOST VRAM & COOL DOWN",
+                    style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -281,17 +289,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text("PROCEDURAL TELEMETRY", style: CyberTheme.titleStyle(fontSize: 18)),
-                        Row(
-                          children: [
-                            Text(
-                              "REALTIME HARDWARE SENSOR PROBES // STATUS: ",
-                              style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
-                            ),
-                            Text(
-                              state.hardwareStatusText,
-                              style: CyberTheme.monospaceStyle(fontSize: 8, color: tempColor),
-                            ),
-                          ],
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: "REALTIME HARDWARE SENSOR PROBES // STATUS: ",
+                                style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
+                              ),
+                              TextSpan(
+                                text: state.hardwareStatusText,
+                                style: CyberTheme.monospaceStyle(fontSize: 8, color: tempColor),
+                              ),
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 20),
                         metricsLayout,
@@ -312,17 +324,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text("PROCEDURAL TELEMETRY", style: CyberTheme.titleStyle(fontSize: 22)),
-                                Row(
-                                  children: [
-                                    Text(
-                                      "REALTIME HARDWARE SENSOR PROBES // STATUS: ",
-                                      style: CyberTheme.monospaceStyle(fontSize: 10, color: CyberTheme.textMuted),
-                                    ),
-                                    Text(
-                                      state.hardwareStatusText,
-                                      style: CyberTheme.monospaceStyle(fontSize: 10, color: tempColor),
-                                    ),
-                                  ],
+                                Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: "REALTIME HARDWARE SENSOR PROBES // STATUS: ",
+                                        style: CyberTheme.monospaceStyle(fontSize: 10, color: CyberTheme.textMuted),
+                                      ),
+                                      TextSpan(
+                                        text: state.hardwareStatusText,
+                                        style: CyberTheme.monospaceStyle(fontSize: 10, color: tempColor),
+                                      ),
+                                    ],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
@@ -449,7 +465,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
                     },
                   ),
                   const SizedBox(width: 8),
-                  Text(mainVal, style: CyberTheme.titleStyle(fontSize: 18, color: Colors.white)),
+                  Expanded(
+                    child: Text(
+                      mainVal,
+                      style: CyberTheme.titleStyle(fontSize: 18, color: Colors.white),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -468,7 +491,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(title, style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted)),
+            Expanded(
+              child: Text(
+                title,
+                style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+            const SizedBox(width: 8),
             Text(
               values.isNotEmpty ? "${values.last.toStringAsFixed(1)}" : "0.0",
               style: CyberTheme.monospaceStyle(fontSize: 9, color: color),
@@ -509,7 +540,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted)),
+              Expanded(
+                child: Text(
+                  label,
+                  style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+              const SizedBox(width: 8),
               Text("${(val * 100).toInt()}%", style: CyberTheme.monospaceStyle(fontSize: 9, color: color)),
             ],
           ),
@@ -529,8 +568,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: CyberTheme.monospaceStyle(fontSize: 10, color: CyberTheme.textMuted)),
-        Text(value, style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white).copyWith(fontWeight: FontWeight.bold)),
+        Expanded(
+          child: Text(
+            label,
+            style: CyberTheme.monospaceStyle(fontSize: 10, color: CyberTheme.textMuted),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white).copyWith(fontWeight: FontWeight.bold),
+        ),
       ],
     );
   }

@@ -274,26 +274,48 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
                                 else
                                   const Spacer(),
                                 const SizedBox(width: 12),
-                                Expanded(
-                                  flex: _isListening ? 2 : 0,
-                                  child: SizedBox(
-                                    width: _isListening ? null : 160,
+                                if (_isListening)
+                                  Expanded(
+                                    flex: 2,
                                     child: NeonButton(
                                       onPressed: () => _triggerGeneration(context),
                                       glowColor: themeColor,
                                       gradientColors: [themeColor, themeColor.withBlue(210).withRed(40)],
                                       borderRadius: 8.0,
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Text("SYNTHESIZE", style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white)),
-                                          const SizedBox(width: 4),
-                                          const Icon(Icons.bolt_rounded, color: Colors.white, size: 14),
-                                        ],
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text("SYNTHESIZE", style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white)),
+                                            const SizedBox(width: 4),
+                                            const Icon(Icons.bolt_rounded, color: Colors.white, size: 14),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  SizedBox(
+                                    width: 160,
+                                    child: NeonButton(
+                                      onPressed: () => _triggerGeneration(context),
+                                      glowColor: themeColor,
+                                      gradientColors: [themeColor, themeColor.withBlue(210).withRed(40)],
+                                      borderRadius: 8.0,
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text("SYNTHESIZE", style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white)),
+                                            const SizedBox(width: 4),
+                                            const Icon(Icons.bolt_rounded, color: Colors.white, size: 14),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
                               ],
                             ),
                             if (data.gameTitle != "NEO-GRID 2099") ...[
@@ -469,13 +491,16 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
                                 glowColor: themeColor,
                                 gradientColors: [themeColor, themeColor.withBlue(210).withRed(40)],
                                 width: 200,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text("SYNTHESIZE", style: CyberTheme.headingStyle(fontSize: 13, color: Colors.white)),
-                                    const SizedBox(width: 8),
-                                    const Icon(Icons.bolt_rounded, color: Colors.white, size: 16),
-                                  ],
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text("SYNTHESIZE", style: CyberTheme.headingStyle(fontSize: 13, color: Colors.white)),
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.bolt_rounded, color: Colors.white, size: 16),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
