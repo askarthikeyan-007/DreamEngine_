@@ -15,7 +15,8 @@
     "@wdio/mocha-framework": "^8.24.12",
     "@wdio/spec-reporter": "^8.24.12",
     "appium": "^2.2.1",
-    "typescript": "^5.3.3",
-    "tsx": "^4.7.1"
+    "ts-node": "^10.9.2",
+    "tsx": "^4.7.1",
+    "typescript": "^5.9.3"
   }
 }
