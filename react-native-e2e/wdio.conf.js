@@ -38,7 +38,7 @@ exports.config = {
             'appium:automationName': 'UiAutomator2',
             'appium:deviceName': 'Android Emulator',
             // Absolute or relative path to your pre-built APK file
-            'appium:app': process.env.APP_PATH || '../android/app/build/outputs/apk/release/app-release.apk',
+            'appium:app': process.env.APP_PATH || '../build/app/outputs/flutter-apk/app-debug.apk',
             'appium:autoGrantPermissions': true, // Automatically grant storage, location, etc.
             'appium:newCommandTimeout': 240,
             'appium:appWaitActivity': '*', // Handle splash screen and dynamic launch activity

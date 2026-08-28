@@ -12,7 +12,7 @@ const capabilities = {
     platformName: 'Android',
     'appium:automationName': 'UiAutomator2',
     'appium:deviceName': 'Android Emulator',
-    'appium:app': path.resolve(__dirname, '../../android/app/build/outputs/apk/release/app-release.apk'),
+    'appium:app': path.resolve(__dirname, '../../build/app/outputs/flutter-apk/app-debug.apk'),
     'appium:autoGrantPermissions': true,
     'appium:newCommandTimeout': 240
 };
