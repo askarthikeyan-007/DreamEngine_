@@ -6,7 +6,7 @@ describe('React Native Excel Report Generation E2E Test', () => {
     
     // Path where the React Native app generates the Excel report on Android
     // Ensure that your app saves the report here, e.g., using react-native-fs or expo-file-system
-    const ANDROID_FILE_PATH = '/sdcard/Download/MonthlyReport.xlsx';
+    const ANDROID_FILE_PATH = '/sdcard/Android/data/com.example.dream_engine_ai/files/Download/MonthlyReport.xlsx';
     
     // Path where the app generates the report on iOS Simulator sandbox
     // WebdriverIO handles iOS paths in XCUITest by referencing the app's standard Documents directory

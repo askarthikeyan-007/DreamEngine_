@@ -244,18 +244,28 @@ class E2EReportTrigger extends StatefulWidget {
 
 class _E2EReportTriggerState extends State<E2EReportTrigger> {
   bool _showSuccess = false;
+  String? _errorMessage;
 
   Future<void> _handleReportGeneration() async {
     try {
+      setState(() {
+        _errorMessage = null;
+        _showSuccess = false;
+      });
+
       final byteData = await rootBundle.load('assets/MonthlyReport.xlsx');
       final bytes = byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes);
 
       if (Platform.isAndroid) {
-        final dir = Directory('/sdcard/Download');
+        final extDir = await getExternalStorageDirectory();
+        if (extDir == null) {
+          throw Exception("External storage directory not available");
+        }
+        final dir = Directory('${extDir.path}/Download');
         if (!await dir.exists()) {
           await dir.create(recursive: true);
         }
-        final file = File('/sdcard/Download/MonthlyReport.xlsx');
+        final file = File('${extDir.path}/Download/MonthlyReport.xlsx');
         await file.writeAsBytes(bytes);
       }
 
@@ -278,6 +288,16 @@ class _E2EReportTriggerState extends State<E2EReportTrigger> {
       });
     } catch (e) {
       debugPrint("E2E Report writing error: $e");
+      setState(() {
+        _errorMessage = "Export failed: $e";
+      });
+      Timer(const Duration(seconds: 5), () {
+        if (mounted) {
+          setState(() {
+            _errorMessage = null;
+          });
+        }
+      });
     }
   }
 
@@ -324,6 +344,27 @@ class _E2EReportTriggerState extends State<E2EReportTrigger> {
                 ),
                 child: Text(
                   'Excel Report Exported Successfully',
+                  style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+        if (_errorMessage != null)
+          Positioned(
+            top: 40,
+            right: 0,
+            child: Semantics(
+              identifier: 'export-error-message',
+              label: 'export-error-message',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3F1F1F).withOpacity(0.9),
+                  border: Border.all(color: Colors.red),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  _errorMessage!,
                   style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
                 ),
               ),
