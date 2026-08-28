@@ -26,11 +26,23 @@ describe('React Native Excel Report Generation E2E Test', () => {
         // 2. Wait for confirmation toast or success message to ensure generation is done
         // In React Native, set testID="export-success-message" on the success label/toast
         const successToast = await $('~export-success-message');
-        await successToast.waitForDisplayed({ 
-            timeout: 20000, 
-            reverse: false, 
-            timeoutMsg: 'Excel generation did not display a success indicator' 
-        });
+        try {
+            await successToast.waitForDisplayed({ 
+                timeout: 20000, 
+                reverse: false, 
+                timeoutMsg: 'Excel generation did not display a success indicator' 
+            });
+        } catch (error) {
+            console.log('=== DEBUG: Test failed to find success toast. Dumping page source... ===');
+            try {
+                const source = await driver.getPageSource();
+                console.log(source);
+            } catch (sourceError) {
+                console.error('Failed to get page source:', sourceError);
+            }
+            console.log('=== END OF DEBUG DUMP ===');
+            throw error;
+        }
 
         const successText = await successToast.getText();
         console.log(`Success indicator found: "${successText}"`);

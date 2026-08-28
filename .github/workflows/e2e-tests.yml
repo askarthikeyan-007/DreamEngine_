@@ -113,7 +113,19 @@ jobs:
             appium --log ./appium.log &
             echo "Waiting for Appium server to start..."
             sleep 8
-            cd react-native-e2e && APP_PATH="$GITHUB_WORKSPACE/build/app/outputs/flutter-apk/app-debug.apk" npm run test
+            EXIT_CODE=0
+            cd react-native-e2e && APP_PATH="$GITHUB_WORKSPACE/build/app/outputs/flutter-apk/app-debug.apk" npm run test || EXIT_CODE=$?
+            adb logcat -d > $GITHUB_WORKSPACE/full_logcat.txt
+            grep -i "flutter\|com.example.dream_engine_ai\|AndroidRuntime\|FATAL\|Exception" $GITHUB_WORKSPACE/full_logcat.txt > $GITHUB_WORKSPACE/app_filtered.log || true
+            exit $EXIT_CODE
+
+      - name: Upload Logcat Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-filtered-log
+          path: app_filtered.log
+          if-no-files-found: warn
 
       - name: Upload React Native Excel Report Artifact
         if: always()
