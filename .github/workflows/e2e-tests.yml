@@ -78,6 +78,17 @@ jobs:
       - name: Build Flutter Android App
         run: flutter build apk --debug
 
+      - name: Verify Android Debug APK built successfully
+        run: |
+          echo "Checking if APK exists at: $GITHUB_WORKSPACE/build/app/outputs/flutter-apk/app-debug.apk"
+          if [ -f "$GITHUB_WORKSPACE/build/app/outputs/flutter-apk/app-debug.apk" ]; then
+            echo "APK found successfully!"
+          else
+            echo "ERROR: Android Debug APK not found at expected path: $GITHUB_WORKSPACE/build/app/outputs/flutter-apk/app-debug.apk"
+            find "$GITHUB_WORKSPACE" -name "app-debug.apk" || true
+            exit 1
+          fi
+
       - name: Set up Appium CLI & Drivers
         run: |
           npm install -g appium
@@ -102,7 +113,7 @@ jobs:
             appium --log ./appium.log &
             echo "Waiting for Appium server to start..."
             sleep 8
-            cd react-native-e2e && APP_PATH="../build/app/outputs/flutter-apk/app-debug.apk" npm run test
+            cd react-native-e2e && APP_PATH="$GITHUB_WORKSPACE/build/app/outputs/flutter-apk/app-debug.apk" npm run test
 
       - name: Upload React Native Excel Report Artifact
         if: always()
