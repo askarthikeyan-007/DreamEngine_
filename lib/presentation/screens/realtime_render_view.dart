@@ -12,6 +12,8 @@ class _RealtimeRenderViewData {
   final double renderScale;
   final AppTheme currentTheme;
   final String gameTitle;
+  final String gameGenre;
+  final String lastGeneratedPrompt;
   final double proceduralSeed;
   final String activeGameType;
 
@@ -21,6 +23,8 @@ class _RealtimeRenderViewData {
     required this.renderScale,
     required this.currentTheme,
     required this.gameTitle,
+    required this.gameGenre,
+    required this.lastGeneratedPrompt,
     required this.proceduralSeed,
     required this.activeGameType,
   });
@@ -35,6 +39,8 @@ class _RealtimeRenderViewData {
           renderScale == other.renderScale &&
           currentTheme == other.currentTheme &&
           gameTitle == other.gameTitle &&
+          gameGenre == other.gameGenre &&
+          lastGeneratedPrompt == other.lastGeneratedPrompt &&
           proceduralSeed == other.proceduralSeed &&
           activeGameType == other.activeGameType;
 
@@ -45,6 +51,8 @@ class _RealtimeRenderViewData {
         renderScale,
         currentTheme,
         gameTitle,
+        gameGenre,
+        lastGeneratedPrompt,
         proceduralSeed,
         activeGameType,
       );
@@ -106,6 +114,8 @@ class _RealtimeRenderViewState extends State<RealtimeRenderView>
         renderScale: state.renderScale,
         currentTheme: state.currentTheme,
         gameTitle: state.gameTitle,
+        gameGenre: state.gameGenre,
+        lastGeneratedPrompt: state.lastGeneratedPrompt,
         proceduralSeed: state.proceduralSeed,
         activeGameType: state.activeGameType,
       ),
@@ -192,7 +202,7 @@ class _RealtimeRenderViewState extends State<RealtimeRenderView>
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       color: Colors.black.withOpacity(0.7),
                       child: Text(
-                        "YAW: ${_yaw.toStringAsFixed(2)} | PITCH: ${_pitch.toStringAsFixed(2)} | BUILD: ${data.gameTitle.toUpperCase()}",
+                        "YAW: ${_yaw.toStringAsFixed(2)} | PITCH: ${_pitch.toStringAsFixed(2)} | BUILD: ${data.gameTitle.toUpperCase()} [${data.gameGenre.toUpperCase()}]",
                         style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
                       ),
                     ),
@@ -308,15 +318,15 @@ class _RealtimeRenderViewState extends State<RealtimeRenderView>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
+                                Text(
                                 "REALTIME RENDERING VIEWPORT",
                                 style: CyberTheme.titleStyle(fontSize: 22),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
-                                "COMPILE SEED: ${data.proceduralSeed.toInt()} // PIPELINE: IMPELLER HW-ACCEL",
-                                style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
+                                "PROMPT: \"${data.lastGeneratedPrompt.isNotEmpty ? data.lastGeneratedPrompt : data.gameTitle}\" // SEED: ${data.proceduralSeed.toInt()}",
+                                style: CyberTheme.monospaceStyle(fontSize: 9.5, color: themeColor),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -777,8 +787,262 @@ class Viewport3DPainter extends CustomPainter {
       // Draw custom weather ash particles
       _drawWeather(canvas, size);
 
+    } else if (activeGameType == "space") {
+      // --- SPACE COMBAT & ORBITAL SIMULATION RENDERING MODE ---
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _backgroundPaint);
+
+      // Deep Space Starfield with parallax drift
+      final starPaint = Paint()..color = Colors.white;
+      for (int i = 0; i < 45; i++) {
+        final double sx = (sin(i * 19.3) * 0.5 + 0.5) * size.width + (yaw * 80.0 * (0.2 + (i % 5) * 0.2));
+        final double sy = (cos(i * 13.7) * 0.5 + 0.5) * size.height + (pitch * 80.0 * (0.2 + (i % 5) * 0.2));
+        final double rad = (i % 4 == 0) ? 1.8 : ((i % 3 == 0) ? 1.2 : 0.8);
+        canvas.drawCircle(Offset(sx % size.width, sy % size.height), rad, starPaint..color = Colors.white.withOpacity((i % 2 == 0) ? 0.8 : 0.35));
+      }
+
+      // Cosmic Nebula Dust Glow
+      final nebulaPaint = Paint()
+        ..shader = RadialGradient(
+          colors: [themeColor.withOpacity(0.22), CyberTheme.electricPurple.withOpacity(0.12), Colors.transparent],
+          radius: 0.8,
+        ).createShader(Rect.fromCircle(center: Offset(size.width * 0.7 + yaw * 30, size.height * 0.3 + pitch * 30), radius: size.width * 0.45));
+      canvas.drawPaint(nebulaPaint);
+
+      // 3D Rotating Planetary Sphere with atmospheric glow ring
+      final double planetX = size.width * 0.25 + yaw * 40;
+      final double planetY = size.height * 0.35 + pitch * 40;
+      final double planetR = 55.0;
+
+      // Planet atmosphere ring glow
+      canvas.drawCircle(Offset(planetX, planetY), planetR + 10, Paint()..color = themeColor.withOpacity(0.15)..style = PaintingStyle.fill);
+      canvas.drawCircle(
+        Offset(planetX, planetY),
+        planetR,
+        Paint()..shader = RadialGradient(
+          center: const Alignment(-0.4, -0.4),
+          colors: [themeColor, const Color(0xFF0D1B2A), const Color(0xFF030712)],
+        ).createShader(Rect.fromCircle(center: Offset(planetX, planetY), radius: planetR)),
+      );
+      // Planetary Equator Rings
+      canvas.drawOval(
+        Rect.fromCenter(center: Offset(planetX, planetY), width: planetR * 2.8, height: planetR * 0.6),
+        Paint()..color = themeColor.withOpacity(0.4)..strokeWidth = 1.5..style = PaintingStyle.stroke,
+      );
+
+      // Floating Asteroids in foreground
+      for (int a = 0; a < 6; a++) {
+        final double ax = (size.width * (0.6 + a * 0.08) + yaw * 60) % size.width;
+        final double ay = (size.height * (0.65 + sin(a * 2.0) * 0.15) + pitch * 60) % size.height;
+        final double aSize = 8.0 + (a * 3.0);
+        canvas.drawRect(
+          Rect.fromCenter(center: Offset(ax, ay), width: aSize, height: aSize * 0.8),
+          Paint()..color = Colors.white24..strokeWidth = 1.2..style = PaintingStyle.stroke,
+        );
+      }
+
+      // 3D Wireframe Starfighter / Player Spacecraft
+      final double shipX = center.dx;
+      final double shipY = center.dy + 30;
+
+      canvas.save();
+      canvas.translate(shipX, shipY);
+      canvas.rotate(yaw * 0.3);
+
+      final shipPaint = Paint()..color = themeColor..strokeWidth = 2.0..style = PaintingStyle.stroke;
+      final shipFill = Paint()..color = themeColor.withOpacity(0.18)..style = PaintingStyle.fill;
+
+      // Starfighter hull triangle
+      final shipPath = Path()
+        ..moveTo(0, -32) // Cockpit nose
+        ..lineTo(22, 24)  // Right wingtip
+        ..lineTo(10, 16)  // Right engine
+        ..lineTo(-10, 16) // Left engine
+        ..lineTo(-22, 24) // Left wingtip
+        ..close();
+      canvas.drawPath(shipPath, shipFill);
+      canvas.drawPath(shipPath, shipPaint);
+
+      // Cockpit canopy glass
+      canvas.drawOval(
+        Rect.fromCenter(center: const Offset(0, -8), width: 10, height: 16),
+        Paint()..color = Colors.cyanAccent.withOpacity(0.75)..style = PaintingStyle.fill,
+      );
+
+      // Dual Plasma Thruster Jet Exhaust Flame Cones
+      final thrusterPaint = Paint()..color = Colors.cyanAccent..style = PaintingStyle.fill;
+      final double flameLen = 14.0 + (sin(DateTime.now().millisecondsSinceEpoch / 60.0).abs() * 8.0);
+      canvas.drawPath(
+        Path()..moveTo(-8, 16)..lineTo(-5, 16 + flameLen)..lineTo(-2, 16)..close(),
+        thrusterPaint,
+      );
+      canvas.drawPath(
+        Path()..moveTo(2, 16)..lineTo(5, 16 + flameLen)..lineTo(8, 16)..close(),
+        thrusterPaint,
+      );
+
+      canvas.restore();
+
+      // Space Combat Telemetry HUD
+      final hudPainter = TextPainter(
+        text: TextSpan(
+          text: "SYS: DEEP SPACE WARP [C++]\n"
+                "ORBIT ALTITUDE: 420.8 KM\n"
+                "WARP VELOCITY: 0.42c [SUBLIGHT]\n"
+                "SHIELD INTEGRITY: 100.0%\n"
+                "TARGET LOCK: ENEMY MOTHERSHIP",
+          style: TextStyle(color: themeColor.withOpacity(0.9), fontSize: 9, fontFamily: "monospace"),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      hudPainter.paint(canvas, Offset(size.width - hudPainter.width - 12, 12));
+
+      _drawWeather(canvas, size);
+
+    } else if (activeGameType == "shooter") {
+      // --- TACTICAL FIRST-PERSON SHOOTER (WARZONE) RENDERING MODE ---
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _backgroundPaint);
+
+      final horizonY = center.dy + (pitch * size.height * 0.4);
+      final vp = Offset(center.dx + (yaw * size.width * 0.15), horizonY);
+
+      // Ground grid
+      _gridPaint.color = themeColor.withOpacity(0.2);
+      for (int i = 0; i <= 14; i++) {
+        canvas.drawLine(vp, Offset((i / 14) * size.width, size.height), _gridPaint);
+      }
+
+      // Military Outpost & Watchtowers
+      final bunkerPaint = Paint()..color = themeColor.withOpacity(0.35)..strokeWidth = 1.5..style = PaintingStyle.stroke;
+      final bunkerFill = Paint()..color = themeColor.withOpacity(0.06)..style = PaintingStyle.fill;
+
+      // Watchtower Left
+      final double twX = size.width * 0.25 + (yaw * size.width * 0.08);
+      final double twY = horizonY + 20;
+      canvas.drawRect(Rect.fromLTWH(twX - 16, twY - 70, 32, 70), bunkerFill);
+      canvas.drawRect(Rect.fromLTWH(twX - 16, twY - 70, 32, 70), bunkerPaint);
+      canvas.drawCircle(Offset(twX, twY - 80), 8, bunkerPaint); // Radar dome
+
+      // Watchtower Right
+      final double tw2X = size.width * 0.75 + (yaw * size.width * 0.08);
+      canvas.drawRect(Rect.fromLTWH(tw2X - 16, twY - 60, 32, 60), bunkerFill);
+      canvas.drawRect(Rect.fromLTWH(tw2X - 16, twY - 60, 32, 60), bunkerPaint);
+
+      // Defense barricades
+      for (int b = 0; b < 3; b++) {
+        final double bx = size.width * (0.38 + b * 0.12) + (yaw * size.width * 0.05);
+        final double by = horizonY + 40;
+        canvas.drawRect(Rect.fromLTWH(bx - 12, by - 16, 24, 16), bunkerPaint);
+      }
+
+      // Tactical Optical Reticle / Crosshair HUD at center
+      final reticlePaint = Paint()..color = themeColor..strokeWidth = 1.5..style = PaintingStyle.stroke;
+      canvas.drawCircle(center, 24, reticlePaint);
+      canvas.drawCircle(center, 4, Paint()..color = themeColor..style = PaintingStyle.fill);
+
+      // Crosshair tick marks
+      canvas.drawLine(Offset(center.dx - 36, center.dy), Offset(center.dx - 28, center.dy), reticlePaint);
+      canvas.drawLine(Offset(center.dx + 28, center.dy), Offset(center.dx + 36, center.dy), reticlePaint);
+      canvas.drawLine(Offset(center.dx, center.dy - 36), Offset(center.dx, center.dy - 28), reticlePaint);
+      canvas.drawLine(Offset(center.dx, center.dy + 28), Offset(center.dx, center.dy + 36), reticlePaint);
+
+      // Tactical Compass Heading Tape at top center
+      final compassPainter = TextPainter(
+        text: TextSpan(
+          text: "[ N  •  045  •  E  •  090  •  S ]",
+          style: TextStyle(color: themeColor.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: "monospace"),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      compassPainter.paint(canvas, Offset(size.width / 2 - compassPainter.width / 2, 20));
+
+      // Tactical HUD Stats in top right
+      final hudPainter = TextPainter(
+        text: TextSpan(
+          text: "WARZONE: GRID COMBAT [C++]\n"
+                "WEAPON: M4A1 TACTICAL [CALIBRATED]\n"
+                "AMMO: 30 / 90 [EXTENDED]\n"
+                "THREAT LEVEL: HOSTILE SQUAD IN SECTOR",
+          style: TextStyle(color: themeColor.withOpacity(0.9), fontSize: 9, fontFamily: "monospace"),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      hudPainter.paint(canvas, Offset(size.width - hudPainter.width - 12, 12));
+
+      _drawWeather(canvas, size);
+
+    } else if (activeGameType == "fantasy") {
+      // --- MYTHIC FANTASY RPG (ZELDA / ELDEN RING) RENDERING MODE ---
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _backgroundPaint);
+
+      final horizonY = center.dy + (pitch * size.height * 0.4);
+
+      // Soaring Mountain Peaks Background
+      final mountPaint = Paint()..color = themeColor.withOpacity(0.12)..style = PaintingStyle.fill;
+      final mountBorder = Paint()..color = themeColor.withOpacity(0.35)..strokeWidth = 1.5..style = PaintingStyle.stroke;
+      final mountPath = Path()
+        ..moveTo(0, horizonY)
+        ..lineTo(size.width * 0.2 + yaw * 15, horizonY - 90)
+        ..lineTo(size.width * 0.45 + yaw * 15, horizonY - 40)
+        ..lineTo(size.width * 0.65 + yaw * 15, horizonY - 120)
+        ..lineTo(size.width * 0.85 + yaw * 15, horizonY - 60)
+        ..lineTo(size.width, horizonY)
+        ..close();
+      canvas.drawPath(mountPath, mountPaint);
+      canvas.drawPath(mountPath, mountBorder);
+
+      // Medieval Castle Spires & Bastions
+      final castlePaint = Paint()..color = themeColor..strokeWidth = 1.8..style = PaintingStyle.stroke;
+      final castleFill = Paint()..color = themeColor.withOpacity(0.15)..style = PaintingStyle.fill;
+
+      final double cx = size.width * 0.5 + yaw * 25;
+      final double cy = horizonY;
+
+      // Central Great Tower
+      canvas.drawRect(Rect.fromLTWH(cx - 24, cy - 100, 48, 100), castleFill);
+      canvas.drawRect(Rect.fromLTWH(cx - 24, cy - 100, 48, 100), castlePaint);
+      // Spire Roof
+      canvas.drawPath(
+        Path()..moveTo(cx - 26, cy - 100)..lineTo(cx, cy - 140)..lineTo(cx + 26, cy - 100)..close(),
+        castlePaint,
+      );
+
+      // Left & Right Flanking Towers
+      canvas.drawRect(Rect.fromLTWH(cx - 60, cy - 70, 26, 70), castleFill);
+      canvas.drawRect(Rect.fromLTWH(cx - 60, cy - 70, 26, 70), castlePaint);
+      canvas.drawPath(Path()..moveTo(cx - 62, cy - 70)..lineTo(cx - 47, cy - 95)..lineTo(cx - 32, cy - 70)..close(), castlePaint);
+
+      canvas.drawRect(Rect.fromLTWH(cx + 34, cy - 70, 26, 70), castleFill);
+      canvas.drawRect(Rect.fromLTWH(cx + 34, cy - 70, 26, 70), castlePaint);
+      canvas.drawPath(Path()..moveTo(cx + 32, cy - 70)..lineTo(cx + 47, cy - 95)..lineTo(cx + 62, cy - 70)..close(), castlePaint);
+
+      // Floating Mana Crystal Obelisk with particle aura
+      final double crystalY = cy - 50 + sin(DateTime.now().millisecondsSinceEpoch / 400.0) * 8.0;
+      final crystalPath = Path()
+        ..moveTo(size.width * 0.25, crystalY - 20)
+        ..lineTo(size.width * 0.25 + 10, crystalY)
+        ..lineTo(size.width * 0.25, crystalY + 20)
+        ..lineTo(size.width * 0.25 - 10, crystalY)
+        ..close();
+      canvas.drawPath(crystalPath, Paint()..color = Colors.cyanAccent.withOpacity(0.85)..style = PaintingStyle.fill);
+      canvas.drawCircle(Offset(size.width * 0.25, crystalY), 24, Paint()..color = Colors.cyanAccent.withOpacity(0.18));
+
+      // Fantasy HUD
+      final hudPainter = TextPainter(
+        text: TextSpan(
+          text: "REALM: MYTHIC HYRULE AURA [C++]\n"
+                "MANA CAPACITY: 100.0%\n"
+                "ANCIENT SEAL: ACTIVE\n"
+                "DRAGON THREAT: VOLCANIC PEAK",
+          style: TextStyle(color: themeColor.withOpacity(0.9), fontSize: 9, fontFamily: "monospace"),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      hudPainter.paint(canvas, Offset(size.width - hudPainter.width - 12, 12));
+
+      _drawWeather(canvas, size);
+
     } else {
-      // --- CYBERPUNK DEFAULT CITY VIEWPORT RENDERING MODE ---
+      // --- CYBERPUNK / OPEN-WORLD CITY VIEWPORT RENDERING MODE ---
       canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _backgroundPaint);
 
       // Apply pitch offsets to horizon
@@ -800,7 +1064,7 @@ class Viewport3DPainter extends CustomPainter {
 
       // Draw horizontal grid depth lines (exponential perspective spacing)
       for (int i = 1; i <= 10; i++) {
-        final double t = pow(i / 10, 2).toDouble(); // exponential decay to vanishing point
+        final double t = pow(i / 10, 2).toDouble();
         final double y = horizonY + t * (size.height - horizonY);
         final double widthOffset = size.width * t;
         _gridPaint.color = themeColor.withOpacity(0.18 * (1.0 - t));

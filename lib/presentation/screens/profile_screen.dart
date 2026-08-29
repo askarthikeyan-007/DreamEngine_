@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dream_engine_ai/core/state/engine_state.dart';
+import 'package:dream_engine_ai/core/models/bio_avatar.dart';
 import 'package:dream_engine_ai/core/theme/cyber_theme.dart';
 import 'package:dream_engine_ai/core/widgets/glass_container.dart';
 import 'package:dream_engine_ai/core/widgets/neon_button.dart';
 import 'package:dream_engine_ai/core/widgets/responsive_image.dart';
+import 'package:dream_engine_ai/core/widgets/bio_avatar_canvas.dart';
+import 'package:dream_engine_ai/core/widgets/avatar_studio_dialog.dart';
+import 'package:dream_engine_ai/core/services/sqlite_service.dart';
 
 class _ProfileScreenData {
   final String operatorName;
@@ -16,7 +20,10 @@ class _ProfileScreenData {
   final String? customProfileImagePath;
   final int selectedAvatarIndex;
   final List<String> avatarNames;
+  final BioAvatarConfig activeBioAvatar;
   final AppTheme currentTheme;
+  final bool isOperatorVerified;
+  final RegionalMarket selectedRegion;
 
   _ProfileScreenData({
     required this.operatorName,
@@ -26,7 +33,10 @@ class _ProfileScreenData {
     this.customProfileImagePath,
     required this.selectedAvatarIndex,
     required this.avatarNames,
+    required this.activeBioAvatar,
     required this.currentTheme,
+    required this.isOperatorVerified,
+    required this.selectedRegion,
   });
 
   @override
@@ -41,7 +51,10 @@ class _ProfileScreenData {
           customProfileImagePath == other.customProfileImagePath &&
           selectedAvatarIndex == other.selectedAvatarIndex &&
           avatarNames == other.avatarNames &&
-          currentTheme == other.currentTheme;
+          activeBioAvatar == other.activeBioAvatar &&
+          currentTheme == other.currentTheme &&
+          isOperatorVerified == other.isOperatorVerified &&
+          selectedRegion == other.selectedRegion;
 
   @override
   int get hashCode => Object.hash(
@@ -52,7 +65,10 @@ class _ProfileScreenData {
         customProfileImagePath,
         selectedAvatarIndex,
         avatarNames,
+        activeBioAvatar,
         currentTheme,
+        isOperatorVerified,
+        selectedRegion,
       );
 }
 
@@ -72,6 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   late TextEditingController _roleEditController;
   late TextEditingController _bioEditController;
   late TextEditingController _emailEditController;
+  String _lastSyncedEmail = "";
 
   @override
   void initState() {
@@ -144,9 +161,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         customProfileImagePath: state.customProfileImagePath,
         selectedAvatarIndex: state.selectedAvatarIndex,
         avatarNames: state.avatarNames,
+        activeBioAvatar: state.activeBioAvatar,
         currentTheme: state.currentTheme,
+        isOperatorVerified: state.isOperatorVerified,
+        selectedRegion: state.selectedRegion,
       ),
       builder: (context, data, _) {
+        if (_lastSyncedEmail != data.operatorEmail) {
+          _lastSyncedEmail = data.operatorEmail;
+          _nameEditController.text = data.operatorName;
+          _roleEditController.text = data.operatorRole;
+          _bioEditController.text = data.operatorBio;
+          _emailEditController.text = data.operatorEmail;
+        }
+
         final state = Provider.of<EngineState>(context, listen: false);
         final themeColor = _getThemeColor(data.currentTheme);
         final double width = MediaQuery.of(context).size.width;
@@ -157,7 +185,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           children: [
             // Operator Profile Card
             GlassContainer(
-              borderColor: themeColor.withOpacity(0.2),
+              borderColor: themeColor.withValues(alpha: 0.2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -174,11 +202,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                               height: 80,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: themeColor.withOpacity(0.4), width: 2),
-                                color: themeColor.withOpacity(0.08),
+                                color: const Color(0xFF141A28),
+                                border: Border.all(
+                                  color: data.isOperatorVerified ? const Color(0xFF00E5FF) : themeColor,
+                                  width: 2.0,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (data.isOperatorVerified ? const Color(0xFF00E5FF) : themeColor).withValues(alpha: 0.3),
+                                    blurRadius: 10,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
                               ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(40),
+                              child: ClipOval(
                                 child: data.customProfileImagePath != null
                                     ? ResponsiveImage(
                                         imagePath: data.customProfileImagePath!,
@@ -186,16 +223,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                         height: 80,
                                         fit: BoxFit.cover,
                                       )
-                                    : Icon(
-                                        data.selectedAvatarIndex == 0
-                                            ? Icons.blur_on_rounded
-                                            : data.selectedAvatarIndex == 1
-                                                ? Icons.face_retouching_natural_rounded
-                                                : data.selectedAvatarIndex == 2
-                                                    ? Icons.precision_manufacturing_rounded
-                                                    : Icons.person_pin_rounded,
-                                        color: themeColor,
-                                        size: 40,
+                                    : BioAvatarCanvas(
+                                        config: data.activeBioAvatar,
+                                        size: 80,
+                                        showBackground: false,
                                       ),
                               ),
                             ),
@@ -206,7 +237,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             height: 86,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: themeColor.withOpacity(0.15), width: 1),
+                              border: Border.all(color: themeColor.withValues(alpha: 0.15), width: 1),
                             ),
                           ),
                           // Camera edit icon badge
@@ -238,10 +269,43 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              "AGENT ${data.operatorName}",
-                              style: CyberTheme.titleStyle(fontSize: 20, color: Colors.white),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    "AGENT ${data.operatorName}",
+                                    style: CyberTheme.titleStyle(fontSize: 20, color: Colors.white),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (data.isOperatorVerified)
+                                  Tooltip(
+                                    message: "AUTHENTICATED VERIFIED OPERATOR",
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.4)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.verified_rounded, color: Color(0xFF00E5FF), size: 14),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            "VERIFIED",
+                                            style: CyberTheme.monospaceStyle(fontSize: 8, color: const Color(0xFF00E5FF)).copyWith(fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
+                            const SizedBox(height: 2),
                             Text(
                               "ROLE: ${data.operatorRole} // ${data.operatorEmail}",
                               style: CyberTheme.monospaceStyle(fontSize: 9, color: themeColor),
@@ -276,47 +340,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   const SizedBox(height: 16),
                   const Divider(color: Colors.white10),
                   const SizedBox(height: 12),
-                  // Selector Row
-                  Text(
-                    "SELECT COGNITIVE PORTRAIT MATRIX",
-                    style: CyberTheme.monospaceStyle(fontSize: 9, color: themeColor),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: List.generate(data.avatarNames.length, (idx) {
-                      final isSel = data.selectedAvatarIndex == idx;
-                      return Expanded(
-                        child: InkWell(
-                          onTap: () => state.setAvatarIndex(idx),
-                          borderRadius: BorderRadius.circular(4),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 6),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(
-                              color: isSel ? themeColor.withOpacity(0.12) : Colors.white.withOpacity(0.02),
-                              border: Border.all(
-                                color: isSel ? themeColor : Colors.white10,
-                                width: 1.0,
-                              ),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              data.avatarNames[idx].toUpperCase(),
-                              style: CyberTheme.monospaceStyle(
-                                fontSize: 9,
-                                color: isSel ? Colors.white : CyberTheme.textMuted,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(color: Colors.white10),
-                  const SizedBox(height: 12),
                   Text(
                     "EDIT OPERATOR SECURE DOSSIER",
                     style: CyberTheme.monospaceStyle(fontSize: 9, color: themeColor),
@@ -347,27 +370,76 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   ),
                   const SizedBox(height: 16),
                   NeonButton(
-                    onPressed: () {
-                      if (_nameEditController.text.isNotEmpty && _emailEditController.text.isNotEmpty) {
-                        state.updateOperatorProfile(
-                          name: _nameEditController.text.trim(),
-                          role: _roleEditController.text.trim(),
-                          email: _emailEditController.text.trim(),
-                          bio: _bioEditController.text.trim(),
-                        );
+                    onPressed: () async {
+                      final name = _nameEditController.text.trim();
+                      final role = _roleEditController.text.trim();
+                      final email = _emailEditController.text.trim();
+                      final bio = _bioEditController.text.trim();
+
+                      if (name.isEmpty || email.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            backgroundColor: themeColor,
+                            backgroundColor: Colors.redAccent,
                             content: Text(
-                              "DOSSIER SECURELY REWRITTEN TO SECTOR 0x0A",
-                              style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.black),
+                              "ERROR: NAME AND SECURITY EMAIL CANNOT BE EMPTY",
+                              style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
                             ),
                           ),
                         );
+                        return;
+                      }
+
+                      // Check if new username is already taken by another operator
+                      final isTaken = await SqliteService.isUsernameTaken(name, excludeEmail: data.operatorEmail);
+                      if (isTaken) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: Colors.redAccent,
+                              content: Text(
+                                "ERROR: USERNAME '$name' IS ALREADY TAKEN BY ANOTHER OPERATOR",
+                                style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
+                              ),
+                            ),
+                          );
+                        }
+                        return;
+                      }
+
+                      final success = await state.updateOperatorProfile(
+                        name: name,
+                        role: role,
+                        email: email,
+                        bio: bio,
+                      );
+
+                      if (context.mounted) {
+                        if (success) {
+                          _lastSyncedEmail = email;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: themeColor,
+                              content: Text(
+                                "DOSSIER SECURELY REWRITTEN & PERSISTED TO SQLITE",
+                                style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.black),
+                              ),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: Colors.redAccent,
+                              content: Text(
+                                "ERROR: FAILED TO PERSIST OPERATOR DOSSIER",
+                                style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
+                              ),
+                            ),
+                          );
+                        }
                       }
                     },
                     glowColor: themeColor,
-                    gradientColors: [themeColor, themeColor.withOpacity(0.5)],
+                    gradientColors: [themeColor, themeColor.withValues(alpha: 0.5)],
                     child: Text(
                       "SAVE SECURITY DOSSIER",
                       style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white),
@@ -376,7 +448,122 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // Verified Badge Upgrade Banner
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: data.isOperatorVerified
+                      ? [
+                          const Color(0xFF00E5FF).withValues(alpha: 0.15),
+                          const Color(0xFF071220),
+                        ]
+                      : [
+                          const Color(0xFFFF1E27).withValues(alpha: 0.12),
+                          const Color(0xFF14080A),
+                        ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                border: Border.all(
+                  color: data.isOperatorVerified
+                      ? const Color(0xFF00E5FF).withValues(alpha: 0.4)
+                      : const Color(0xFFFF1E27).withValues(alpha: 0.35),
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: (data.isOperatorVerified ? const Color(0xFF00E5FF) : const Color(0xFFFF1E27)).withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: data.isOperatorVerified ? const Color(0xFF00E5FF) : const Color(0xFFFF1E27),
+                      ),
+                    ),
+                    child: Icon(
+                      data.isOperatorVerified ? Icons.verified_rounded : Icons.verified_user_outlined,
+                      color: data.isOperatorVerified ? const Color(0xFF00E5FF) : const Color(0xFFFF1E27),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              data.isOperatorVerified ? "AUTHENTICATED OPERATOR STATUS" : "OFFICIAL VERIFIED BADGE",
+                              style: CyberTheme.headingStyle(
+                                fontSize: 11.5,
+                                color: data.isOperatorVerified ? const Color(0xFF00E5FF) : Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: Text(
+                                data.isOperatorVerified
+                                    ? "ACTIVE"
+                                    : "BASE: ₹1,000 INR (${state.getFormattedVerifiedBadgePrice()})",
+                                style: CyberTheme.monospaceStyle(
+                                  fontSize: 7.5,
+                                  color: data.isOperatorVerified ? const Color(0xFF00E5FF) : themeColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          data.isOperatorVerified
+                              ? "Verified checkmark active across DevGram, DevChat, Achievements, and Operator dossiers."
+                              : "Unlock verified blue badge, high-throughput cloud compilation, and unlock all achievements.",
+                          style: CyberTheme.bodyStyle(fontSize: 10, color: CyberTheme.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  if (!data.isOperatorVerified)
+                    InkWell(
+                      onTap: () => _showVerifiedBadgePurchaseDialog(context, state, themeColor),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00E5FF).withValues(alpha: 0.18),
+                          border: Border.all(color: const Color(0xFF00E5FF)),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.shield_rounded, size: 14, color: Color(0xFF00E5FF)),
+                            const SizedBox(width: 6),
+                            Text(
+                              "GET VERIFIED",
+                              style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white).copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
             // Achievements list
             Text(
               "SYSTEM ACHIEVEMENTS",
@@ -386,21 +573,58 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             _buildAchievementTile("VOXEL COMPILER LEGEND", "Generate a cyberpunk city with 50,000+ nodes", true, themeColor),
             _buildAchievementTile("NPC SYNAPSE OVERLORD", "Establish dialogue networks across 4 distinct factions", true, themeColor),
             _buildAchievementTile("SHIELD PROTOCOL DEPLOYED", "Acquire threat bypass certification on cloud nodes", true, themeColor),
-            _buildAchievementTile("GRAVITY WARPER", "Override planetary physics engines under zero-G load", false, themeColor),
+            _buildAchievementTile(
+              "GRAVITY WARPER",
+              "Override planetary physics engines under zero-G load",
+              data.isOperatorVerified,
+              const Color(0xFF00E5FF),
+              isVerifiedReq: true,
+              onUnlock: () => _showVerifiedBadgePurchaseDialog(context, state, themeColor),
+            ),
+            _buildAchievementTile(
+              "VERIFIED OPERATOR PROTOCOL",
+              "Certified official neural system operator node (₹1,000 INR)",
+              data.isOperatorVerified,
+              const Color(0xFF00E5FF),
+              isVerifiedReq: true,
+              onUnlock: () => _showVerifiedBadgePurchaseDialog(context, state, themeColor),
+            ),
           ],
         );
 
         final Widget rightColumn = GlassContainer(
-          borderColor: themeColor.withOpacity(0.2),
+          borderColor: themeColor.withValues(alpha: 0.2),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("3D BIO-AVATAR INTEGRATION", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
-              const SizedBox(height: 4),
-              Text(
-                "DRAG TO ROTATE HOLOGRAM MESH",
-                style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("3D BIO-AVATAR INTEGRATION", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
+                      const SizedBox(height: 2),
+                      Text(
+                        "INTERACTIVE 3D CHARACTER RENDERING",
+                        style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00FF88).withValues(alpha: 0.12),
+                      border: Border.all(color: const Color(0xFF00FF88).withValues(alpha: 0.4)),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      "LIVE 3D",
+                      style: CyberTheme.monospaceStyle(fontSize: 7, color: const Color(0xFF00FF88)).copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
 
@@ -409,7 +633,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 height: 250,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     border: Border.all(color: Colors.white10),
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -417,32 +641,158 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     borderRadius: BorderRadius.circular(7),
                     child: GestureDetector(
                       onPanUpdate: _onAvatarPanUpdate,
-                      child: AnimatedBuilder(
-                        animation: _rotationController,
-                        builder: (context, _) {
-                          final currentYaw = _avatarYaw + (_rotationController.value * 2 * pi);
-                          return RepaintBoundary(
-                            child: CustomPaint(
-                              painter: Avatar3DPainter(
-                                yaw: currentYaw,
-                                pitch: _avatarPitch,
-                                color: themeColor,
-                                avatarIndex: data.selectedAvatarIndex,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          AnimatedBuilder(
+                            animation: _rotationController,
+                            builder: (context, _) {
+                              final double idleFloat = sin(_rotationController.value * 2 * pi) * 0.04;
+                              return BioAvatarCanvas(
+                                config: data.activeBioAvatar,
+                                yaw: _avatarYaw,
+                                pitch: _avatarPitch + idleFloat,
+                                size: 240,
+                                showBackground: true,
+                              );
+                            },
+                          ),
+                          Positioned(
+                            bottom: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white24, width: 0.5),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.threed_rotation_rounded, color: themeColor, size: 10),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "DRAG TO ROTATE 3D MESH",
+                                    style: CyberTheme.monospaceStyle(fontSize: 7, color: Colors.white70),
+                                  ),
+                                ],
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-              Center(
-                child: Text(
-                  "AVATAR SEED: 0xFF24A8",
-                  style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
+              const SizedBox(height: 12),
+
+              // Trait Details
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.02),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.white10),
                 ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data.activeBioAvatar.name.toUpperCase(),
+                          style: CyberTheme.headingStyle(fontSize: 10, color: Colors.white),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          "STYLE: ${data.activeBioAvatar.clothingStyle.replaceAll('_', ' ').toUpperCase()}",
+                          style: CyberTheme.monospaceStyle(fontSize: 7.5, color: CyberTheme.textMuted),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      "SEED: 0x${data.activeBioAvatar.name.hashCode.toRadixString(16).toUpperCase().padLeft(6, '0')}",
+                      style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Action Buttons
+              Row(
+                children: [
+                  Expanded(
+                    flex: 6,
+                    child: NeonButton(
+                      onPressed: () async {
+                        final updated = await AvatarStudioDialog.show(context, data.activeBioAvatar);
+                        if (updated != null) {
+                          state.updateBioAvatar(updated);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: const Color(0xFF00FF88).withValues(alpha: 0.2),
+                                content: Text(
+                                  "SUCCESS: UPDATED 3D BIO-AVATAR FOR ${data.operatorName.toUpperCase()}.",
+                                  style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      glowColor: themeColor,
+                      gradientColors: [themeColor, themeColor.withValues(alpha: 0.7)],
+                      borderRadius: 6,
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.palette_rounded, color: Colors.white, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            "CUSTOMIZE AVATAR",
+                            style: CyberTheme.headingStyle(fontSize: 9.5, color: Colors.white).copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 4,
+                    child: InkWell(
+                      onTap: () {
+                        final randomAvatar = BioAvatarConfig.randomize();
+                        state.updateBioAvatar(randomAvatar);
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.purpleAccent.withValues(alpha: 0.12),
+                          border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.3)),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.auto_awesome_rounded, color: Colors.purpleAccent, size: 13),
+                            const SizedBox(width: 4),
+                            Text(
+                              "AI RANDOM",
+                              style: CyberTheme.monospaceStyle(fontSize: 8.5, color: Colors.white).copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -467,7 +817,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 leftColumn,
               ] else ...[
                 SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.72,
+                  height: MediaQuery.of(context).size.height * 0.76,
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -491,13 +841,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildAchievementTile(String title, String desc, bool unlocked, Color color) {
+  Widget _buildAchievementTile(
+    String title,
+    String desc,
+    bool unlocked,
+    Color color, {
+    bool isVerifiedReq = false,
+    VoidCallback? onUnlock,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.02),
-        border: Border.all(color: unlocked ? color.withOpacity(0.25) : Colors.white10),
+        color: Colors.white.withValues(alpha: 0.02),
+        border: Border.all(color: unlocked ? color.withValues(alpha: 0.25) : Colors.white10),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -512,10 +869,29 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: CyberTheme.headingStyle(fontSize: 11, color: unlocked ? Colors.white : CyberTheme.textMuted),
+                Row(
+                  children: [
+                    Text(
+                      title,
+                      style: CyberTheme.headingStyle(fontSize: 11, color: unlocked ? Colors.white : CyberTheme.textMuted),
+                    ),
+                    if (isVerifiedReq && !unlocked) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00E5FF).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          "VERIFICATION REQ",
+                          style: CyberTheme.monospaceStyle(fontSize: 7, color: const Color(0xFF00E5FF)),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
+                const SizedBox(height: 2),
                 Text(
                   desc,
                   style: CyberTheme.bodyStyle(fontSize: 10, color: CyberTheme.textMuted),
@@ -523,6 +899,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               ],
             ),
           ),
+          if (isVerifiedReq && !unlocked && onUnlock != null)
+            TextButton(
+              onPressed: onUnlock,
+              child: Text(
+                "UNLOCK",
+                style: CyberTheme.monospaceStyle(fontSize: 9, color: const Color(0xFF00E5FF)).copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
         ],
       ),
     );
@@ -541,9 +925,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             filled: true,
-            fillColor: Colors.black.withOpacity(0.25),
+            fillColor: Colors.black.withValues(alpha: 0.25),
             enabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: themeColor.withOpacity(0.2)),
+              borderSide: BorderSide(color: themeColor.withValues(alpha: 0.2)),
             ),
             focusedBorder: OutlineInputBorder(
               borderSide: BorderSide(color: themeColor),
@@ -554,301 +938,274 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
+  void _showVerifiedBadgePurchaseDialog(BuildContext context, EngineState state, Color themeColor) {
+    RegionalMarket chosenMarket = state.selectedRegion;
+    String selectedPaymentMethod = chosenMarket.countryCode == "IN" ? "UPI / GPAY / PHONEPE" : "CREDIT / DEBIT CARD";
+    bool isProcessing = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) {
+          final formattedPrice = state.getFormattedVerifiedBadgePrice(chosenMarket);
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF080C16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: const Color(0xFF00E5FF).withValues(alpha: 0.4)),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.verified_rounded, color: Color(0xFF00E5FF), size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "VERIFIED OPERATOR PROTOCOL",
+                        style: CyberTheme.headingStyle(fontSize: 13, color: Colors.white),
+                      ),
+                      Text(
+                        "BASE: 1,000 INR (DYNAMIC LOCATION CONVERSION)",
+                        style: CyberTheme.monospaceStyle(fontSize: 8, color: const Color(0xFF00E5FF)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 460,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Location selector
+                    Text(
+                      "SELECT BILLING LOCATION / CURRENCY MATRIX",
+                      style: CyberTheme.monospaceStyle(fontSize: 8.5, color: CyberTheme.textMuted),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        border: Border.all(color: Colors.white24),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<RegionalMarket>(
+                          value: chosenMarket,
+                          isExpanded: true,
+                          dropdownColor: const Color(0xFF090D18),
+                          style: CyberTheme.monospaceStyle(fontSize: 11, color: Colors.white),
+                          items: state.regionalMarkets.map((m) {
+                            return DropdownMenuItem<RegionalMarket>(
+                              value: m,
+                              child: Row(
+                                children: [
+                                  Text("${m.countryCode}  ${m.regionName}", style: const TextStyle(color: Colors.white)),
+                                  const Spacer(),
+                                  Text(
+                                    state.getFormattedVerifiedBadgePrice(m),
+                                    style: TextStyle(color: const Color(0xFF00E5FF), fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDlgState(() {
+                                chosenMarket = val;
+                                if (chosenMarket.countryCode == "IN") {
+                                  selectedPaymentMethod = "UPI / GPAY / PHONEPE";
+                                } else {
+                                  selectedPaymentMethod = "CREDIT / DEBIT CARD";
+                                }
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Big Price Amount Display
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00E5FF).withValues(alpha: 0.08),
+                        border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "TOTAL AMOUNT DUE",
+                                style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                formattedPrice,
+                                style: CyberTheme.titleStyle(fontSize: 22, color: const Color(0xFF00E5FF)),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00FF88).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFF00FF88).withValues(alpha: 0.4)),
+                            ),
+                            child: Text(
+                              "LIFETIME ACCESS",
+                              style: CyberTheme.monospaceStyle(fontSize: 8, color: const Color(0xFF00FF88)).copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Perks List
+                    Text("VERIFICATION PERKS INCLUDED:", style: CyberTheme.monospaceStyle(fontSize: 8.5, color: Colors.white70)),
+                    const SizedBox(height: 6),
+                    _buildPerkRow("Official Cyan Verified Badge beside name across DevGram & DevChat"),
+                    _buildPerkRow("Unlock exclusive achievements: 'Gravity Warper' & 'Verified Protocol'"),
+                    _buildPerkRow("Priority AI neural mesh compiler throughput and VRAM allocation"),
+                    _buildPerkRow("+500 Bonus Rusty Tokens added to operator wallet immediately"),
+                    const SizedBox(height: 16),
+
+                    // Payment Method Options
+                    Text("SELECT PAYMENT ROUTE:", style: CyberTheme.monospaceStyle(fontSize: 8.5, color: Colors.white70)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (chosenMarket.countryCode == "IN")
+                          _buildPayOption("UPI / GPAY / PHONEPE", Icons.qr_code_scanner_rounded, selectedPaymentMethod, (val) => setDlgState(() => selectedPaymentMethod = val)),
+                        _buildPayOption("CREDIT / DEBIT CARD", Icons.credit_card_rounded, selectedPaymentMethod, (val) => setDlgState(() => selectedPaymentMethod = val)),
+                        _buildPayOption("RUSTY TOKENS", Icons.toll_rounded, selectedPaymentMethod, (val) => setDlgState(() => selectedPaymentMethod = val)),
+                        _buildPayOption("CRYPTO / WEB3", Icons.currency_bitcoin_rounded, selectedPaymentMethod, (val) => setDlgState(() => selectedPaymentMethod = val)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isProcessing ? null : () => Navigator.pop(ctx),
+                child: Text("CANCEL", style: CyberTheme.monospaceStyle(fontSize: 10, color: CyberTheme.textMuted)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00E5FF),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                onPressed: isProcessing
+                    ? null
+                    : () async {
+                        setDlgState(() => isProcessing = true);
+                        final success = await state.purchaseVerifiedBadge(
+                          paymentMethod: selectedPaymentMethod,
+                          market: chosenMarket,
+                        );
+                        if (context.mounted) {
+                          Navigator.pop(ctx);
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: const Color(0xFF00E5FF),
+                                content: Text(
+                                  "SUCCESS: VERIFIED OPERATOR BADGE ACTIVATED FOR ${state.operatorName.toUpperCase()}! (+500 RUSTY TOKENS REWARDED)",
+                                  style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.black).copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                child: isProcessing
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : Text(
+                        "PAY $formattedPrice & ACTIVATE",
+                        style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.black).copyWith(fontWeight: FontWeight.bold),
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPerkRow(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle_outline_rounded, size: 13, color: Color(0xFF00E5FF)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: CyberTheme.bodyStyle(fontSize: 9.5, color: Colors.white70),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPayOption(String label, IconData icon, String current, Function(String) onSelect) {
+    final isSel = current == label;
+    return InkWell(
+      onTap: () => onSelect(label),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSel ? const Color(0xFF00E5FF).withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
+          border: Border.all(
+            color: isSel ? const Color(0xFF00E5FF) : Colors.white12,
+          ),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: isSel ? const Color(0xFF00E5FF) : Colors.white60),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: CyberTheme.monospaceStyle(
+                fontSize: 8,
+                color: isSel ? Colors.white : Colors.white60,
+              ).copyWith(fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Color _getThemeColor(AppTheme theme) {
     if (theme == AppTheme.ironMan) return Colors.amber;
     if (theme == AppTheme.nvidiaGreen) return Colors.lightGreenAccent;
     if (theme == AppTheme.appleVision) return Colors.white;
     return CyberTheme.neonBlue;
   }
-}
-
-// CustomPainter to draw a dynamic 3D wireframe mesh based on the selected avatar type using vector projection math!
-class Avatar3DPainter extends CustomPainter {
-  final double yaw;
-  final double pitch;
-  final Color color;
-  final int avatarIndex;
-
-  Avatar3DPainter({
-    required this.yaw,
-    required this.pitch,
-    required this.color,
-    required this.avatarIndex,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.0
-      ..style = PaintingStyle.stroke;
-
-    final nodePaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final double radius = min(size.width, size.height) * 0.32;
-    final List<List<double>> points3D = [];
-    final List<List<int>> edges = [];
-
-    if (avatarIndex == 0) {
-      // 1. Cyber Core (3D Tesseract / Hypercube mesh)
-      final double R = radius * 0.8;
-      // Vertices 0-7: Outer Cube
-      for (int x = -1; x <= 1; x += 2) {
-        for (int y = -1; y <= 1; y += 2) {
-          for (int z = -1; z <= 1; z += 2) {
-            points3D.add([x * R, y * R, z * R]);
-          }
-        }
-      }
-      // Vertices 8-15: Inner Cube
-      for (int x = -1; x <= 1; x += 2) {
-        for (int y = -1; y <= 1; y += 2) {
-          for (int z = -1; z <= 1; z += 2) {
-            points3D.add([x * R * 0.45, y * R * 0.45, z * R * 0.45]);
-          }
-        }
-      }
-      // Connect outer cube edges
-      for (int i = 0; i < 8; i++) {
-        for (int j = i + 1; j < 8; j++) {
-          int diff = 0;
-          for (int k = 0; k < 3; k++) {
-            if (points3D[i][k] != points3D[j][k]) diff++;
-          }
-          if (diff == 1) edges.add([i, j]);
-        }
-      }
-      // Connect inner cube edges
-      for (int i = 0; i < 8; i++) {
-        for (int j = i + 1; j < 8; j++) {
-          int diff = 0;
-          for (int k = 0; k < 3; k++) {
-            if ((points3D[i + 8][k] / 0.45) != (points3D[j + 8][k] / 0.45)) diff++;
-          }
-          if (diff == 1) edges.add([i + 8, j + 8]);
-        }
-      }
-      // Connect corresponding outer & inner corners
-      for (int i = 0; i < 8; i++) {
-        edges.add([i, i + 8]);
-      }
-    } else if (avatarIndex == 1) {
-      // 2. Vesper Net (3D Torus Ring Topology)
-      final double R_torus = radius * 0.8;
-      final double r_torus = radius * 0.28;
-      final int latCount = 8;
-      final int lonCount = 14;
-
-      for (int lat = 0; lat < latCount; lat++) {
-        final double u = (lat * 2 * pi) / latCount;
-        for (int lon = 0; lon < lonCount; lon++) {
-          final double v = (lon * 2 * pi) / lonCount;
-          final double x = (R_torus + r_torus * cos(u)) * cos(v);
-          final double y = r_torus * sin(u);
-          final double z = (R_torus + r_torus * cos(u)) * sin(v);
-          points3D.add([x, y, z]);
-        }
-      }
-      // Connect torus edges
-      for (int lat = 0; lat < latCount; lat++) {
-        for (int lon = 0; lon < lonCount; lon++) {
-          final int idx = lat * lonCount + lon;
-          final int nextLonIdx = lat * lonCount + ((lon + 1) % lonCount);
-          final int nextLatIdx = ((lat + 1) % latCount) * lonCount + lon;
-          edges.add([idx, nextLonIdx]);
-          edges.add([idx, nextLatIdx]);
-        }
-      }
-    } else if (avatarIndex == 2) {
-      // 3. Tactical Drone (Double-pyramid octahedron core with rotor arms and blade frames)
-      final double R = radius;
-      // Core body
-      points3D.add([0, R * 0.6, 0]);   // 0: Top
-      points3D.add([0, -R * 0.6, 0]);  // 1: Bottom
-      points3D.add([R * 0.35, 0, 0]);  // 2: Front
-      points3D.add([-R * 0.35, 0, 0]); // 3: Back
-      points3D.add([0, 0, R * 0.35]);  // 4: Right
-      points3D.add([0, 0, -R * 0.35]); // 5: Left
-
-      edges.addAll([
-        [0, 2], [0, 3], [0, 4], [0, 5],
-        [1, 2], [1, 3], [1, 4], [1, 5],
-        [2, 4], [4, 3], [3, 5], [5, 2]
-      ]);
-
-      // Rotor Arm Tips
-      points3D.add([R * 0.85, R * 0.1, R * 0.85]);   // 6: Front Right
-      points3D.add([-R * 0.85, R * 0.1, R * 0.85]);  // 7: Back Right
-      points3D.add([-R * 0.85, R * 0.1, -R * 0.85]); // 8: Back Left
-      points3D.add([R * 0.85, R * 0.1, -R * 0.85]);  // 9: Front Left
-
-      edges.addAll([[4, 6], [3, 7], [5, 8], [2, 9]]);
-
-      // Rotor ring coordinates
-      int startIdx = 10;
-      for (int arm = 0; arm < 4; arm++) {
-        final double ax = points3D[6 + arm][0];
-        final double ay = points3D[6 + arm][1];
-        final double az = points3D[6 + arm][2];
-
-        for (int b = 0; b < 4; b++) {
-          final double bx = ax + R * 0.22 * cos(b * pi / 2);
-          final double bz = az + R * 0.22 * sin(b * pi / 2);
-          points3D.add([bx, ay, bz]);
-        }
-
-        final int c0 = startIdx + arm * 4;
-        edges.addAll([
-          [6 + arm, c0], [6 + arm, c0 + 1], [6 + arm, c0 + 2], [6 + arm, c0 + 3],
-          [c0, c0 + 1], [c0 + 1, c0 + 2], [c0 + 2, c0 + 3], [c0 + 3, c0]
-        ]);
-      }
-    } else {
-      // 4. Aegis Pilot (Cyber-Helmet mesh with visor plate cut-out)
-      final double R = radius;
-      final int latCount = 5;
-      final int lonCount = 8;
-
-      for (int lat = 0; lat <= latCount; lat++) {
-        final double latAngle = (lat * pi) / (latCount + 1);
-        for (int lon = 0; lon < lonCount; lon++) {
-          final double lonAngle = (lon * 2 * pi) / lonCount;
-          final double x = R * 0.75 * sin(latAngle) * cos(lonAngle);
-          final double y = R * 0.85 * cos(latAngle);
-          final double z = R * 0.75 * sin(latAngle) * sin(lonAngle);
-
-          // Visor front cut-out to make it a helmet shell
-          final bool isFrontVisorArea = (z > R * 0.3 && y > -R * 0.3 && y < R * 0.3 && x > -R * 0.5 && x < R * 0.5);
-          if (!isFrontVisorArea) {
-            points3D.add([x, y, z]);
-          }
-        }
-      }
-
-      // Visor shield panel front vertices
-      final int visorStartIdx = points3D.length;
-      points3D.addAll([
-        [-R * 0.45, R * 0.25, R * 0.65],  // Top Left Visor
-        [R * 0.45, R * 0.25, R * 0.65],   // Top Right Visor
-        [R * 0.45, -R * 0.28, R * 0.65],  // Bottom Right Visor
-        [-R * 0.45, -R * 0.28, R * 0.65], // Bottom Left Visor
-        [0.0, R * 0.35, R * 0.72],        // Visor Peak Crest
-        [0.0, -R * 0.38, R * 0.72],       // Visor Chin Point
-      ]);
-
-      // Connect visor visor
-      edges.addAll([
-        [visorStartIdx, visorStartIdx + 1],
-        [visorStartIdx + 1, visorStartIdx + 2],
-        [visorStartIdx + 2, visorStartIdx + 3],
-        [visorStartIdx + 3, visorStartIdx],
-        [visorStartIdx, visorStartIdx + 4],
-        [visorStartIdx + 1, visorStartIdx + 4],
-        [visorStartIdx + 2, visorStartIdx + 5],
-        [visorStartIdx + 3, visorStartIdx + 5],
-        [visorStartIdx + 4, visorStartIdx + 5],
-      ]);
-
-      // Connect skull dome vertices using proximity-based neighboring
-      for (int i = 0; i < visorStartIdx; i++) {
-        for (int j = i + 1; j < visorStartIdx; j++) {
-          final double dx = points3D[i][0] - points3D[j][0];
-          final double dy = points3D[i][1] - points3D[j][1];
-          final double dz = points3D[i][2] - points3D[j][2];
-          final double dist = sqrt(dx * dx + dy * dy + dz * dz);
-          if (dist > R * 0.1 && dist < R * 0.48) {
-            edges.add([i, j]);
-          }
-        }
-      }
-
-      // Connect visor frame to nearby helmet body points
-      for (int v = 0; v < 6; v++) {
-        final int vIdx = visorStartIdx + v;
-        double minDist = double.infinity;
-        int nearestIdx = -1;
-
-        for (int i = 0; i < visorStartIdx; i++) {
-          final double dx = points3D[vIdx][0] - points3D[i][0];
-          final double dy = points3D[vIdx][1] - points3D[i][1];
-          final double dz = points3D[vIdx][2] - points3D[i][2];
-          final double dist = sqrt(dx * dx + dy * dy + dz * dz);
-          if (dist < minDist) {
-            minDist = dist;
-            nearestIdx = i;
-          }
-        }
-        if (nearestIdx != -1) {
-          edges.add([vIdx, nearestIdx]);
-        }
-      }
-    }
-
-    // 3D vector rotation projection (yaw & pitch rotation matrices)
-    final double cosYaw = cos(yaw);
-    final double sinYaw = sin(yaw);
-    final double cosPitch = cos(pitch);
-    final double sinPitch = sin(pitch);
-
-    final List<Offset> points2D = [];
-    final List<double> depths = [];
-
-    for (var pt in points3D) {
-      final double x = pt[0];
-      final double y = pt[1];
-      final double z = pt[2];
-
-      // Yaw rotation (Y-axis)
-      final double rx1 = x * cosYaw - z * sinYaw;
-      final double rz1 = x * sinYaw + z * cosYaw;
-
-      // Pitch rotation (X-axis)
-      final double ry2 = y * cosPitch - rz1 * sinPitch;
-      final double rz2 = y * sinPitch + rz1 * cosPitch;
-
-      // Perspective scale division
-      final double cameraDist = radius * 2.5;
-      final double focalLength = radius * 2.2;
-      final double scale = focalLength / (rz2 + cameraDist);
-
-      final double px = center.dx + rx1 * scale;
-      final double py = center.dy + ry2 * scale;
-
-      points2D.add(Offset(px, py));
-      depths.add(rz2);
-    }
-
-    // Draw projected connecting lines
-    for (var edge in edges) {
-      final int i = edge[0];
-      final int j = edge[1];
-
-      if (i < points2D.length && j < points2D.length) {
-        final double avgDepth = (depths[i] + depths[j]) / 2;
-        final double opacity = ((avgDepth + radius) / (2 * radius)).clamp(0.08, 0.75);
-        canvas.drawLine(
-          points2D[i],
-          points2D[j],
-          paint..color = color.withOpacity(opacity),
-        );
-      }
-    }
-
-    // Draw vertex node dots
-    for (int i = 0; i < points2D.length; i++) {
-      final double depth = depths[i];
-      final double opacity = ((depth + radius) / (2 * radius)).clamp(0.1, 0.9);
-      canvas.drawCircle(
-        points2D[i],
-        1.5 + (opacity * 2.0),
-        nodePaint..color = color.withOpacity(opacity),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

@@ -9,6 +9,8 @@ import 'package:dream_engine_ai/core/theme/cyber_theme.dart';
 import 'package:dream_engine_ai/core/widgets/glass_container.dart';
 import 'package:dream_engine_ai/core/widgets/neon_button.dart';
 import 'package:dream_engine_ai/core/services/download_helper.dart' as dl;
+import 'package:dream_engine_ai/core/models/sound_theme.dart';
+import 'package:dream_engine_ai/core/services/audio_synth_helper.dart';
 
 class _GamePreviewScreenData {
   final String gameTitle;
@@ -111,6 +113,7 @@ class _SoundtrackData {
   final String soundStatus;
   final double soundProgress;
   final AppTheme currentTheme;
+  final SoundTheme currentSoundTheme;
 
   _SoundtrackData({
     required this.isPlayingSoundtrack,
@@ -121,6 +124,7 @@ class _SoundtrackData {
     required this.soundStatus,
     required this.soundProgress,
     required this.currentTheme,
+    required this.currentSoundTheme,
   });
 
   @override
@@ -135,7 +139,8 @@ class _SoundtrackData {
           isGeneratingSound == other.isGeneratingSound &&
           soundStatus == other.soundStatus &&
           soundProgress == other.soundProgress &&
-          currentTheme == other.currentTheme;
+          currentTheme == other.currentTheme &&
+          currentSoundTheme == other.currentSoundTheme;
 
   @override
   int get hashCode => Object.hash(
@@ -147,6 +152,7 @@ class _SoundtrackData {
         soundStatus,
         soundProgress,
         currentTheme,
+        currentSoundTheme,
       );
 }
 
@@ -499,28 +505,33 @@ class _GamePreviewScreenState extends State<GamePreviewScreen> {
 
 class RadialVisualizerPainter extends CustomPainter {
   final bool isPlaying;
-  final Color color;
+  final Color primaryColor;
+  final Color accentColor;
+  final List<double>? customFrequencies;
   final Random _random = Random();
 
-  RadialVisualizerPainter({required this.isPlaying, required this.color});
+  RadialVisualizerPainter({
+    required this.isPlaying,
+    required this.primaryColor,
+    required this.accentColor,
+    this.customFrequencies,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    final double baseRadius = 70.0;
+    final double baseRadius = 45.0;
     final int barCount = 45;
 
     for (int i = 0; i < barCount; i++) {
       final double angle = (i * 2 * pi) / barCount;
       double factor = 1.0;
       if (isPlaying) {
-        // Bouncing heights based on pseudorandom frequencies
-        factor = 1.0 + (_random.nextDouble() * 0.28);
+        if (customFrequencies != null && i < customFrequencies!.length && customFrequencies![i] > 0) {
+          factor = 1.0 + (customFrequencies![i] * 0.42);
+        } else {
+          factor = 1.0 + (_random.nextDouble() * 0.35);
+        }
       }
 
       final double startRadius = baseRadius;
@@ -535,7 +546,14 @@ class RadialVisualizerPainter extends CustomPainter {
         center.dy + endRadius * sin(angle),
       );
 
-      canvas.drawLine(start, end, paint..color = color.withOpacity(isPlaying ? 0.6 : 0.25));
+      final barColor = Color.lerp(primaryColor, accentColor, (i / barCount)) ?? primaryColor;
+      final paint = Paint()
+        ..color = barColor.withValues(alpha: isPlaying ? 0.85 : 0.25)
+        ..strokeWidth = 2.0
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke;
+
+      canvas.drawLine(start, end, paint);
     }
   }
 
@@ -1565,10 +1583,11 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
         soundStatus: state.soundStatus,
         soundProgress: state.soundProgress,
         currentTheme: state.currentTheme,
+        currentSoundTheme: state.currentSoundTheme,
       ),
       builder: (context, data, _) {
         final state = Provider.of<EngineState>(context, listen: false);
-        final themeColor = _getThemeColor(data.currentTheme);
+        final currentSoundTheme = data.currentSoundTheme;
 
         // Run visualizer only when playing soundtrack
         if (data.isPlayingSoundtrack) {
@@ -1582,11 +1601,28 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
         }
 
         return GlassContainer(
-          borderColor: themeColor.withOpacity(0.2),
+          borderColor: currentSoundTheme.primaryColor.withValues(alpha: 0.3),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text("SYNTH SOUNDTRACK ENGINE", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("SYNTH SOUNDTRACK ENGINE", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: currentSoundTheme.primaryColor.withValues(alpha: 0.15),
+                      border: Border.all(color: currentSoundTheme.primaryColor.withValues(alpha: 0.5)),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      "${currentSoundTheme.bpm.round()} BPM // ${currentSoundTheme.waveform.toUpperCase()}",
+                      style: CyberTheme.monospaceStyle(fontSize: 7.5, color: currentSoundTheme.primaryColor).copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
 
               // Compact visualizer block (Holographic disc rotating)
@@ -1601,8 +1637,16 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
                         height: 90,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: themeColor.withOpacity(0.05),
-                          border: Border.all(color: themeColor.withOpacity(0.2)),
+                          color: currentSoundTheme.primaryColor.withValues(alpha: 0.08),
+                          border: Border.all(color: currentSoundTheme.primaryColor.withValues(alpha: 0.3)),
+                          boxShadow: [
+                            if (data.isPlayingSoundtrack)
+                              BoxShadow(
+                                color: currentSoundTheme.primaryColor.withValues(alpha: 0.25),
+                                blurRadius: 16,
+                                spreadRadius: 3,
+                              ),
+                          ],
                         ),
                       ),
                       Positioned.fill(
@@ -1613,31 +1657,48 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
                               return CustomPaint(
                                 painter: RadialVisualizerPainter(
                                   isPlaying: data.isPlayingSoundtrack,
-                                  color: themeColor,
+                                  primaryColor: currentSoundTheme.primaryColor,
+                                  accentColor: currentSoundTheme.accentColor,
+                                  customFrequencies: AudioSynthesizer.instance.visualizerFrequencies,
                                 ),
                               );
                             },
                           ),
                         ),
                       ),
-                      Icon(Icons.music_note_rounded, color: themeColor, size: 24),
+                      Icon(
+                        data.isPlayingSoundtrack ? Icons.graphic_eq_rounded : Icons.music_note_rounded,
+                        color: currentSoundTheme.primaryColor,
+                        size: 24,
+                      ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 8),
 
-              // Track Info
+              // Track Info & Genre Tag
               Text(
-                data.playlist[data.currentTrackIndex].toUpperCase(),
-                style: CyberTheme.headingStyle(fontSize: 10, color: Colors.white),
+                currentSoundTheme.title,
+                style: CyberTheme.headingStyle(fontSize: 10.5, color: Colors.white),
                 textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                "${currentSoundTheme.genre.toUpperCase()} • ${currentSoundTheme.description}",
+                style: CyberTheme.bodyStyle(fontSize: 8.5, color: CyberTheme.textMuted),
+                textAlign: TextAlign.center,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
               Text(
-                data.isPlayingSoundtrack ? "SYNTHESIZER DEPLOYED // RUNNING" : "SYNTHESIZER IDLE",
-                style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
+                data.isPlayingSoundtrack ? "SYNTHESIZER LIVE // POLYPHONIC AUDIO ACTIVE" : "SYNTHESIZER IDLE // READY",
+                style: CyberTheme.monospaceStyle(
+                  fontSize: 8,
+                  color: data.isPlayingSoundtrack ? const Color(0xFF00FF88) : currentSoundTheme.primaryColor,
+                ).copyWith(fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -1647,24 +1708,33 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () => state.prevTrack(),
                     icon: const Icon(Icons.skip_previous_rounded, color: Colors.white70, size: 20),
+                    tooltip: "Previous Track Preset",
                   ),
                   const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () => state.toggleSoundtrack(),
                     child: Container(
-                      height: 36,
-                      width: 36,
+                      height: 38,
+                      width: 38,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: themeColor.withOpacity(0.5)),
-                        color: themeColor.withOpacity(0.12),
+                        border: Border.all(color: currentSoundTheme.primaryColor),
+                        color: currentSoundTheme.primaryColor.withValues(alpha: 0.18),
+                        boxShadow: [
+                          if (data.isPlayingSoundtrack)
+                            BoxShadow(
+                              color: currentSoundTheme.primaryColor.withValues(alpha: 0.4),
+                              blurRadius: 10,
+                              spreadRadius: 1,
+                            ),
+                        ],
                       ),
                       child: Icon(
                         data.isPlayingSoundtrack ? Icons.pause_rounded : Icons.play_arrow_rounded,
                         color: Colors.white,
-                        size: 18,
+                        size: 20,
                       ),
                     ),
                   ),
@@ -1672,6 +1742,7 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
                   IconButton(
                     onPressed: () => state.nextTrack(),
                     icon: const Icon(Icons.skip_next_rounded, color: Colors.white70, size: 20),
+                    tooltip: "Next Track Preset",
                   ),
                 ],
               ),
@@ -1687,11 +1758,11 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
                 child: Slider(
                   value: data.trackProgress,
                   onChanged: (val) {},
-                  activeColor: themeColor,
+                  activeColor: currentSoundTheme.primaryColor,
                   inactiveColor: Colors.white10,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               const Divider(color: Colors.white10),
               const SizedBox(height: 4),
               Text(
@@ -1700,17 +1771,35 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
+
+              // Quick theme preset chips
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildSoundThemeChip("⚡ Synthwave", "epic cyberpunk synthwave neon beat", state, currentSoundTheme),
+                    _buildSoundThemeChip("👾 8-Bit Arcade", "retro 8bit arcade chiptune boss fight", state, currentSoundTheme),
+                    _buildSoundThemeChip("🟢 Matrix Techno", "dark matrix acid techno bass drop", state, currentSoundTheme),
+                    _buildSoundThemeChip("🌌 Deep Space", "deep space ambient cosmic stellar pads", state, currentSoundTheme),
+                    _buildSoundThemeChip("☕ Lo-Fi Chill", "relaxing lofi chill study beat", state, currentSoundTheme),
+                    _buildSoundThemeChip("🩸 Dark Horror", "dark horror doom evil industrial pulse", state, currentSoundTheme),
+                    _buildSoundThemeChip("⚔️ Epic Battle", "epic orchestral battle cinematic clash", state, currentSoundTheme),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+
               if (data.isGeneratingSound) ...[
                 Text(
                   data.soundStatus.toUpperCase(),
-                  style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
+                  style: CyberTheme.monospaceStyle(fontSize: 8, color: currentSoundTheme.primaryColor),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
                 LinearProgressIndicator(
                   value: data.soundProgress,
                   backgroundColor: Colors.white12,
-                  color: themeColor,
+                  color: currentSoundTheme.primaryColor,
                   minHeight: 2,
                 ),
               ] else ...[
@@ -1724,16 +1813,21 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                           filled: true,
-                          fillColor: Colors.black.withOpacity(0.2),
-                          hintText: "epic arcade synthwave beat...",
+                          fillColor: Colors.black.withValues(alpha: 0.2),
+                          hintText: "e.g. 8-bit arcade, acid techno, space ambient...",
                           hintStyle: CyberTheme.bodyStyle(fontSize: 9, color: Colors.white30),
                           enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: themeColor.withOpacity(0.2)),
+                            borderSide: BorderSide(color: currentSoundTheme.primaryColor.withValues(alpha: 0.2)),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: themeColor),
+                            borderSide: BorderSide(color: currentSoundTheme.primaryColor),
                           ),
                         ),
+                        onSubmitted: (val) {
+                          if (val.trim().isNotEmpty) {
+                            state.generateSoundWithAI(val.trim());
+                          }
+                        },
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -1747,8 +1841,8 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: themeColor.withOpacity(0.12),
-                          side: BorderSide(color: themeColor),
+                          backgroundColor: currentSoundTheme.primaryColor.withValues(alpha: 0.15),
+                          side: BorderSide(color: currentSoundTheme.primaryColor),
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                         ),
                         child: const Icon(Icons.auto_awesome, color: Colors.white, size: 12),
@@ -1761,6 +1855,38 @@ class _SoundtrackSectionState extends State<_SoundtrackSection>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildSoundThemeChip(String label, String prompt, EngineState state, SoundTheme activeTheme) {
+    final isSelected = activeTheme.title.toLowerCase().contains(label.replaceAll(RegExp(r'[^\w\s]'), '').trim().toLowerCase());
+    return Padding(
+      padding: const EdgeInsets.only(right: 6.0),
+      child: InkWell(
+        onTap: () {
+          _soundPromptController.text = prompt;
+          state.generateSoundWithAI(prompt);
+        },
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? activeTheme.primaryColor.withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.03),
+            border: Border.all(
+              color: isSelected ? activeTheme.primaryColor : Colors.white12,
+              width: 0.8,
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            label,
+            style: CyberTheme.monospaceStyle(
+              fontSize: 7.5,
+              color: isSelected ? Colors.white : Colors.white60,
+            ).copyWith(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+          ),
+        ),
+      ),
     );
   }
 }

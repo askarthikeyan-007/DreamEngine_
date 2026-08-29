@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dream_engine_ai/core/state/engine_state.dart';
 import 'package:dream_engine_ai/core/theme/cyber_theme.dart';
+import 'package:dream_engine_ai/core/models/bio_avatar.dart';
+import 'package:dream_engine_ai/core/widgets/bio_avatar_canvas.dart';
 import 'package:dream_engine_ai/core/widgets/glass_container.dart';
 import 'package:dream_engine_ai/core/widgets/neon_button.dart';
 import 'package:dream_engine_ai/core/widgets/responsive_image.dart';
@@ -17,7 +19,7 @@ class DevGramScreen extends StatefulWidget {
 }
 
 class _DevGramScreenState extends State<DevGramScreen> {
-  final TextEditingController _commentController = TextEditingController();
+  final Map<String, TextEditingController> _postCommentControllers = {};
   final Map<String, bool> _doubleTapHeartVisible = {}; // Track like pop-ups for posts
 
   @override
@@ -25,26 +27,31 @@ class _DevGramScreenState extends State<DevGramScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final state = Provider.of<EngineState>(context, listen: false);
-      if (state.devgramPosts.isEmpty) {
-        state.fetchDevgramPosts();
-      }
-      if (state.devgramStories.isEmpty) {
-        state.fetchDevgramStories();
-      }
+      state.fetchDevgramPosts();
+      state.fetchDevgramStories();
     });
   }
 
   @override
   void dispose() {
-    _commentController.dispose();
+    for (var controller in _postCommentControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  Future<String?> _pickDeviceImage() async {
+  TextEditingController _getCommentController(String postId) {
+    if (!_postCommentControllers.containsKey(postId)) {
+      _postCommentControllers[postId] = TextEditingController();
+    }
+    return _postCommentControllers[postId]!;
+  }
+
+  Future<String?> _pickDeviceImage({ImageSource source = ImageSource.gallery}) async {
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
+        source: source,
         maxWidth: 1080,
         maxHeight: 1080,
         imageQuality: 85,
@@ -63,16 +70,81 @@ class _DevGramScreenState extends State<DevGramScreen> {
     return CyberTheme.neonBlue;
   }
 
+  Widget _buildOperatorAvatar({
+    required String email,
+    required String name,
+    required int avatarIdx,
+    required EngineState state,
+    double radius = 16,
+    Color? borderColor,
+  }) {
+    final isMe = email.toLowerCase().trim() == state.operatorEmail.toLowerCase().trim();
+    if (isMe && state.customProfileImagePath != null && state.customProfileImagePath!.isNotEmpty) {
+      return Container(
+        width: radius * 2,
+        height: radius * 2,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: borderColor != null ? Border.all(color: borderColor, width: 1.5) : null,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: ResponsiveImage(
+            imagePath: state.customProfileImagePath!,
+            width: radius * 2,
+            height: radius * 2,
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+
+    if (isMe) {
+      return Container(
+        width: radius * 2,
+        height: radius * 2,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: const Color(0xFF141A28),
+          border: borderColor != null ? Border.all(color: borderColor, width: 1.5) : null,
+        ),
+        child: ClipOval(
+          child: BioAvatarCanvas(
+            config: state.activeBioAvatar,
+            size: radius * 2,
+            showBackground: false,
+          ),
+        ),
+      );
+    }
+
+    // Other operator avatar
+    final avatarConfig = avatarIdx < BioAvatarConfig.presets.length
+        ? BioAvatarConfig.presets[avatarIdx]
+        : BioAvatarConfig.presets[0];
+
+    return Container(
+      width: radius * 2,
+      height: radius * 2,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFF141A28),
+        border: borderColor != null ? Border.all(color: borderColor, width: 1.5) : null,
+      ),
+      child: ClipOval(
+        child: BioAvatarCanvas(
+          config: avatarConfig,
+          size: radius * 2,
+          showBackground: false,
+        ),
+      ),
+    );
+  }
+
   void _showCreatePostModal(BuildContext context, EngineState state, Color themeColor) {
     final captionController = TextEditingController();
-    String selectedImage = "https://picsum.photos/seed/voxeldev/600/400";
-    
-    final List<Map<String, String>> presets = [
-      {"name": "VOXEL CITY", "url": "https://picsum.photos/seed/voxel/600/400"},
-      {"name": "VEHICLE PHYSICS", "url": "https://picsum.photos/seed/racing/600/400"},
-      {"name": "NETCODE CLUSTER", "url": "https://picsum.photos/seed/cyber/600/400"},
-      {"name": "SOUND WAVEFORM", "url": "https://picsum.photos/seed/synth/600/400"},
-    ];
+    String? selectedImagePath;
+    bool isAvatarCard = false;
 
     showModalBottomSheet(
       context: context,
@@ -88,7 +160,7 @@ class _DevGramScreenState extends State<DevGramScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF0A0A0E),
-                  border: Border(top: BorderSide(color: themeColor.withOpacity(0.3), width: 1.5)),
+                  border: Border(top: BorderSide(color: themeColor.withValues(alpha: 0.3), width: 1.5)),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 padding: const EdgeInsets.all(24),
@@ -107,94 +179,182 @@ class _DevGramScreenState extends State<DevGramScreen> {
                       const SizedBox(height: 18),
                       Text("TRANSMIT COGNITIVE GRID CAPTURE", style: CyberTheme.headingStyle(fontSize: 14)),
                       Text(
-                        "DISPATCH SCREENSHOT OR PIPELINE CODE TO THE DEVGRAM MATRIX",
+                        "DISPATCH REAL TRANSMISSION TO THE LIVE DEVGRAM MATRIX",
                         style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
                       ),
                       const SizedBox(height: 20),
 
-                      // Image Selector
-                      Text("SELECT PROCEDURAL HUD CAPTURE:", style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted)),
+                      // Image Source Action Buttons
+                      Text("ATTACH OPERATOR MEDIA:", style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.textMuted)),
                       const SizedBox(height: 10),
                       Row(
-                        children: presets.map((preset) {
-                          final isSel = selectedImage == preset["url"];
-                          return Expanded(
+                        children: [
+                          // Gallery Button
+                          Expanded(
                             child: InkWell(
-                              onTap: () {
-                                setModalState(() {
-                                  selectedImage = preset["url"]!;
-                                });
+                              onTap: () async {
+                                final path = await _pickDeviceImage(source: ImageSource.gallery);
+                                if (path != null) {
+                                  setModalState(() {
+                                    selectedImagePath = path;
+                                    isAvatarCard = false;
+                                  });
+                                }
                               },
+                              borderRadius: BorderRadius.circular(8),
                               child: Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 4),
-                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                                 decoration: BoxDecoration(
-                                  color: isSel ? themeColor.withOpacity(0.12) : Colors.white.withOpacity(0.02),
-                                  border: Border.all(color: isSel ? themeColor : Colors.white10),
-                                  borderRadius: BorderRadius.circular(6),
+                                  color: (selectedImagePath != null && !isAvatarCard) ? themeColor.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
+                                  border: Border.all(
+                                    color: (selectedImagePath != null && !isAvatarCard) ? themeColor : Colors.white12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  preset["name"]!,
-                                  style: CyberTheme.monospaceStyle(fontSize: 8, color: isSel ? Colors.white : CyberTheme.textMuted),
-                                  textAlign: TextAlign.center,
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.photo_library_rounded, color: themeColor, size: 20),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      "GALLERY",
+                                      style: CyberTheme.monospaceStyle(fontSize: 8.5, color: Colors.white).copyWith(fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 12),
-                      // Upload from device button
-                      NeonButton(
-                        onPressed: () async {
-                          final path = await _pickDeviceImage();
-                          if (path != null) {
-                            setModalState(() {
-                              selectedImage = path;
-                            });
-                          }
-                        },
-                        glowColor: themeColor,
-                        gradientColors: [Colors.white.withOpacity(0.05), Colors.white.withOpacity(0.1)],
-                        height: 36,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.upload_file_rounded, color: themeColor, size: 16),
-                            const SizedBox(width: 8),
-                            Text(
-                              "UPLOAD FROM DEVICE",
-                              style: CyberTheme.headingStyle(fontSize: 9, color: Colors.white),
+                          ),
+                          const SizedBox(width: 8),
+
+                          // Camera Button
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final path = await _pickDeviceImage(source: ImageSource.camera);
+                                if (path != null) {
+                                  setModalState(() {
+                                    selectedImagePath = path;
+                                    isAvatarCard = false;
+                                  });
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.03),
+                                  border: Border.all(color: Colors.white12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.camera_alt_rounded, color: themeColor, size: 20),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      "CAMERA",
+                                      style: CyberTheme.monospaceStyle(fontSize: 8.5, color: Colors.white).copyWith(fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Preview Selected Image
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: ResponsiveImage(
-                          imagePath: selectedImage,
-                          height: 140,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+
+                          // 3D Avatar Card Option
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                setModalState(() {
+                                  selectedImagePath = "avatar_snapshot";
+                                  isAvatarCard = true;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: isAvatarCard ? themeColor.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
+                                  border: Border.all(
+                                    color: isAvatarCard ? themeColor : Colors.white12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.person_pin_rounded, color: themeColor, size: 20),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      "3D AVATAR",
+                                      style: CyberTheme.monospaceStyle(fontSize: 8.5, color: Colors.white).copyWith(fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
 
-                      // Caption
+                      // Preview Selected Image / Avatar / Code DevLog
+                      if (selectedImagePath != null && !isAvatarCard) ...[
+                        Stack(
+                          alignment: Alignment.topRight,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: ResponsiveImage(
+                                imagePath: selectedImagePath!,
+                                height: 160,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () {
+                                setModalState(() {
+                                  selectedImagePath = null;
+                                });
+                              },
+                              icon: const CircleAvatar(
+                                radius: 12,
+                                backgroundColor: Colors.black87,
+                                child: Icon(Icons.close_rounded, size: 14, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ] else if (isAvatarCard) ...[
+                        Container(
+                          height: 160,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF141A28),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: themeColor.withValues(alpha: 0.4)),
+                          ),
+                          alignment: Alignment.center,
+                          child: BioAvatarCanvas(
+                            config: state.activeBioAvatar,
+                            size: 140,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Caption Field
                       TextField(
                         controller: captionController,
                         maxLines: 3,
                         style: CyberTheme.bodyStyle(fontSize: 13, color: Colors.white),
                         decoration: InputDecoration(
-                          hintText: "WRITE CAPTION AND ATTACH #HASHTAGS...",
+                          hintText: "WRITE CAPTION, DEVLOG NOTES, OR #HASHTAGS...",
                           hintStyle: CyberTheme.bodyStyle(fontSize: 12, color: Colors.white24),
                           filled: true,
-                          fillColor: Colors.black.withOpacity(0.3),
+                          fillColor: Colors.black.withValues(alpha: 0.3),
                           enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: themeColor.withOpacity(0.2)),
+                            borderSide: BorderSide(color: themeColor.withValues(alpha: 0.2)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderSide: BorderSide(color: themeColor),
@@ -203,23 +363,36 @@ class _DevGramScreenState extends State<DevGramScreen> {
                       ),
                       const SizedBox(height: 24),
 
+                      // Transmit Post Button
                       NeonButton(
                         onPressed: () async {
-                          if (captionController.text.trim().isEmpty) return;
-                          
+                          final caption = captionController.text.trim();
+                          if (caption.isEmpty && selectedImagePath == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: Colors.redAccent,
+                                content: Text(
+                                  "PLEASE WRITE A TRANSMISSION CAPTION OR ATTACH MEDIA",
+                                  style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
                           // Dispatch post
                           await state.createDevgramPost(
-                            captionController.text.trim(),
-                            selectedImage,
+                            caption.isNotEmpty ? caption : "Transmission broadcast from ${state.operatorName}.",
+                            selectedImagePath ?? "",
                           );
-                          
+
                           if (context.mounted) {
                             Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 backgroundColor: themeColor,
                                 content: Text(
-                                  "GRID CAPTURE BROADCASTED TO DEVGRAM CHANNELS",
+                                  "TRANSMISSION BROADCASTED TO LIVE DEVGRAM MATRIX",
                                   style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.black),
                                 ),
                               ),
@@ -227,8 +400,8 @@ class _DevGramScreenState extends State<DevGramScreen> {
                           }
                         },
                         glowColor: themeColor,
-                        gradientColors: [themeColor, themeColor.withOpacity(0.5)],
-                        child: Text("TRANSMIT PIPELINE RECORD", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
+                        gradientColors: [themeColor, themeColor.withValues(alpha: 0.5)],
+                        child: Text("TRANSMIT TO DEVGRAM", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white)),
                       ),
                       const SizedBox(height: 12),
                     ],
@@ -266,6 +439,12 @@ class _DevGramScreenState extends State<DevGramScreen> {
               });
             }
 
+            final authorName = story["authorName"] ?? "OPERATOR";
+            final authorEmail = story["authorEmail"] ?? "";
+            final avatarIndex = story["avatarIndex"] ?? 0;
+            final imageUrl = story["imageUrl"]?.toString() ?? "";
+            final isAvatarStory = imageUrl == "avatar_snapshot" || imageUrl.isEmpty;
+
             return Dialog(
               backgroundColor: Colors.black,
               insetPadding: EdgeInsets.zero,
@@ -277,15 +456,26 @@ class _DevGramScreenState extends State<DevGramScreen> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Full screen story image
-                    ResponsiveImage(
-                      imagePath: story["imageUrl"] ?? "",
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      errorWidget: Container(color: Colors.black26),
-                    ),
-                    
+                    // Full screen story image or 3D Avatar view
+                    if (isAvatarStory)
+                      Container(
+                        color: const Color(0xFF0A0E17),
+                        child: Center(
+                          child: BioAvatarCanvas(
+                            config: Provider.of<EngineState>(context, listen: false).activeBioAvatar,
+                            size: 280,
+                          ),
+                        ),
+                      )
+                    else
+                      ResponsiveImage(
+                        imagePath: imageUrl,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        errorWidget: Container(color: Colors.black26),
+                      ),
+
                     // Dark gradient at top
                     Positioned(
                       top: 0,
@@ -295,7 +485,7 @@ class _DevGramScreenState extends State<DevGramScreen> {
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [Colors.black.withOpacity(0.8), Colors.transparent],
+                            colors: [Colors.black.withValues(alpha: 0.8), Colors.transparent],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                           ),
@@ -324,14 +514,17 @@ class _DevGramScreenState extends State<DevGramScreen> {
                           // User Info
                           Row(
                             children: [
-                              CircleAvatar(
+                              _buildOperatorAvatar(
+                                email: authorEmail,
+                                name: authorName,
+                                avatarIdx: avatarIndex,
+                                state: Provider.of<EngineState>(context, listen: false),
                                 radius: 14,
-                                backgroundColor: themeColor.withOpacity(0.12),
-                                child: Icon(Icons.person_pin_rounded, color: themeColor, size: 14),
+                                borderColor: themeColor,
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                story["authorName"] ?? "UNKNOWN",
+                                authorName,
                                 style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
                               ),
                               const Spacer(),
@@ -355,13 +548,8 @@ class _DevGramScreenState extends State<DevGramScreen> {
   }
 
   void _showUploadStoryModal(BuildContext context, EngineState state, Color themeColor) {
-    final List<Map<String, String>> presets = [
-      {"name": "CYBER WORLD STORY", "url": "https://picsum.photos/seed/cyberstory/600/1000"},
-      {"name": "VOXEL CITY STORY", "url": "https://picsum.photos/seed/voxelstory/600/1000"},
-      {"name": "RACING SIM STORY", "url": "https://picsum.photos/seed/racingstory/600/1000"},
-      {"name": "MULTIPLATE LOG STORY", "url": "https://picsum.photos/seed/synthstory/600/1000"},
-    ];
-    String selectedUrl = presets[0]["url"]!;
+    String? selectedImagePath;
+    bool isAvatarStory = false;
 
     showDialog(
       context: context,
@@ -371,100 +559,196 @@ class _DevGramScreenState extends State<DevGramScreen> {
             return Dialog(
               backgroundColor: Colors.transparent,
               child: GlassContainer(
-                borderColor: themeColor.withOpacity(0.3),
+                borderColor: themeColor.withValues(alpha: 0.3),
                 padding: const EdgeInsets.all(24),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text("TRANSMIT COGNITIVE GRID STORY", style: CyberTheme.headingStyle(fontSize: 12)),
+                      Text("BROADCAST 24H OPERATOR STORY", style: CyberTheme.headingStyle(fontSize: 12)),
                       Text(
-                        "DISPATCH HUD LOG STORY COMPILATION SEGMENT",
+                        "DISPATCH REAL-TIME OPERATOR HUD SNAPSHOT",
                         style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
                       ),
                       const SizedBox(height: 20),
-                      Column(
-                        children: presets.map((preset) {
-                          final isSel = selectedUrl == preset["url"];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 10),
+
+                      // Image Pick Options
+                      Row(
+                        children: [
+                          // Gallery Button
+                          Expanded(
                             child: InkWell(
-                              onTap: () {
-                                setModalState(() {
-                                  selectedUrl = preset["url"]!;
-                                });
+                              onTap: () async {
+                                final path = await _pickDeviceImage(source: ImageSource.gallery);
+                                if (path != null) {
+                                  setModalState(() {
+                                    selectedImagePath = path;
+                                    isAvatarStory = false;
+                                  });
+                                }
                               },
+                              borderRadius: BorderRadius.circular(8),
                               child: Container(
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
                                 decoration: BoxDecoration(
-                                  color: isSel ? themeColor.withOpacity(0.12) : Colors.white.withOpacity(0.02),
-                                  border: Border.all(color: isSel ? themeColor : Colors.white10),
-                                  borderRadius: BorderRadius.circular(6),
+                                  color: (selectedImagePath != null && !isAvatarStory) ? themeColor.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
+                                  border: Border.all(
+                                    color: (selectedImagePath != null && !isAvatarStory) ? themeColor : Colors.white12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Row(
+                                child: Column(
                                   children: [
-                                    Icon(Icons.photo_rounded, color: isSel ? themeColor : Colors.white54, size: 16),
-                                    const SizedBox(width: 12),
+                                    Icon(Icons.photo_library_rounded, color: themeColor, size: 20),
+                                    const SizedBox(height: 6),
                                     Text(
-                                      preset["name"]!,
-                                      style: CyberTheme.monospaceStyle(fontSize: 9, color: isSel ? Colors.white : CyberTheme.textMuted),
+                                      "GALLERY",
+                                      style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white),
                                     ),
                                   ],
                                 ),
                               ),
                             ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      // Upload from device button
-                      NeonButton(
-                        onPressed: () async {
-                          final path = await _pickDeviceImage();
-                          if (path != null) {
-                            setModalState(() {
-                              selectedUrl = path;
-                            });
-                          }
-                        },
-                        glowColor: themeColor,
-                        gradientColors: [Colors.white.withOpacity(0.05), Colors.white.withOpacity(0.1)],
-                        height: 36,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.upload_file_rounded, color: themeColor, size: 16),
-                            const SizedBox(width: 8),
-                            Text(
-                              "UPLOAD FROM DEVICE",
-                              style: CyberTheme.headingStyle(fontSize: 9, color: Colors.white),
+                          ),
+                          const SizedBox(width: 8),
+
+                          // Camera Button
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final path = await _pickDeviceImage(source: ImageSource.camera);
+                                if (path != null) {
+                                  setModalState(() {
+                                    selectedImagePath = path;
+                                    isAvatarStory = false;
+                                  });
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.03),
+                                  border: Border.all(color: Colors.white12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.camera_alt_rounded, color: themeColor, size: 20),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      "CAMERA",
+                                      style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+
+                          // 3D Avatar Option
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                setModalState(() {
+                                  selectedImagePath = "avatar_snapshot";
+                                  isAvatarStory = true;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: isAvatarStory ? themeColor.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
+                                  border: Border.all(
+                                    color: isAvatarStory ? themeColor : Colors.white12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.person_pin_rounded, color: themeColor, size: 20),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      "3D AVATAR",
+                                      style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
+
                       // Preview Story image
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: ResponsiveImage(
-                          imagePath: selectedUrl,
-                          height: 160,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
+                      if (selectedImagePath != null && !isAvatarStory)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: ResponsiveImage(
+                            imagePath: selectedImagePath!,
+                            height: 180,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      else if (isAvatarStory)
+                        Container(
+                          height: 180,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF141A28),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: themeColor.withValues(alpha: 0.4)),
+                          ),
+                          alignment: Alignment.center,
+                          child: BioAvatarCanvas(
+                            config: state.activeBioAvatar,
+                            size: 150,
+                          ),
+                        )
+                      else
+                        Container(
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.02),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          child: Center(
+                            child: Text(
+                              "CHOOSE MEDIA TO BROADCAST STORY",
+                              style: CyberTheme.monospaceStyle(fontSize: 8.5, color: CyberTheme.textMuted),
+                            ),
+                          ),
                         ),
-                      ),
+
                       const SizedBox(height: 20),
                       NeonButton(
                         onPressed: () async {
-                          await state.uploadDevgramStory(selectedUrl);
+                          if (selectedImagePath == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: Colors.redAccent,
+                                content: Text(
+                                  "PLEASE ATTACH AN IMAGE OR 3D AVATAR FOR YOUR STORY",
+                                  style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          await state.uploadDevgramStory(selectedImagePath!);
                           if (context.mounted) {
                             Navigator.pop(ctx);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 backgroundColor: themeColor,
                                 content: Text(
-                                  "STORY UPLOADED TO OPERATORS MATRIX NODE",
+                                  "STORY BROADCASTED TO LIVE DEVGRAM MATRIX",
                                   style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.black),
                                 ),
                               ),
@@ -472,8 +756,8 @@ class _DevGramScreenState extends State<DevGramScreen> {
                           }
                         },
                         glowColor: themeColor,
-                        gradientColors: [themeColor, themeColor.withOpacity(0.5)],
-                        child: Text("TRANSMIT STORY", style: CyberTheme.headingStyle(fontSize: 10, color: Colors.white)),
+                        gradientColors: [themeColor, themeColor.withValues(alpha: 0.5)],
+                        child: Text("BROADCAST STORY", style: CyberTheme.headingStyle(fontSize: 10, color: Colors.white)),
                       ),
                     ],
                   ),
@@ -492,11 +776,11 @@ class _DevGramScreenState extends State<DevGramScreen> {
       orElse: () => {
         "name": authorName,
         "email": email,
-        "role": "SYSTEM CODER",
+        "role": "SYSTEM OPERATOR",
         "avatar": avatarIdx.toString(),
         "status": "ONLINE",
-        "bio": "Dossier synchronized from secure memory registry.",
-        "ping": "15ms",
+        "bio": "Operator synchronized with the live DevGram network.",
+        "ping": "12ms",
       },
     );
     state.selectUserProfile(op);
@@ -510,16 +794,9 @@ class _DevGramScreenState extends State<DevGramScreen> {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 768;
 
-    final avatarIcons = [
-      Icons.blur_on_rounded,
-      Icons.face_retouching_natural_rounded,
-      Icons.precision_manufacturing_rounded,
-      Icons.person_pin_rounded,
-    ];
-
-    // Build horizontal stories row including "Add Story" option and dynamic stories
+    // Build horizontal stories row
     List<Widget> storyBubbles = [];
-    
+
     // 1. My Story (Add Story) Button
     storyBubbles.add(
       Padding(
@@ -537,13 +814,28 @@ class _DevGramScreenState extends State<DevGramScreen> {
                     height: 56,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: themeColor.withOpacity(0.5), width: 1.5),
+                      border: Border.all(color: themeColor.withValues(alpha: 0.6), width: 1.5),
                     ),
                   ),
-                  CircleAvatar(
+                  _buildOperatorAvatar(
+                    email: state.operatorEmail,
+                    name: state.operatorName,
+                    avatarIdx: state.selectedAvatarIndex,
+                    state: state,
                     radius: 24,
-                    backgroundColor: Colors.white.withOpacity(0.04),
-                    child: Icon(Icons.add_rounded, color: themeColor, size: 24),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: themeColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.black, width: 1.5),
+                      ),
+                      child: const Icon(Icons.add_rounded, color: Colors.black, size: 12),
+                    ),
                   ),
                 ],
               ),
@@ -558,114 +850,53 @@ class _DevGramScreenState extends State<DevGramScreen> {
       ),
     );
 
-    // 2. Active Stories or fallbacks
-    if (state.devgramStories.isNotEmpty) {
-      for (var story in state.devgramStories) {
-        final author = story["authorName"] ?? "UNKNOWN";
-        final avatar = story["avatarIndex"] ?? 0;
-        final authorEmail = story["authorEmail"] ?? "";
-        storyBubbles.add(
-          Padding(
-            padding: const EdgeInsets.only(right: 14.0),
-            child: Column(
-              children: [
-                InkWell(
-                  onTap: () => _showStoryViewer(context, story, themeColor),
-                  borderRadius: BorderRadius.circular(32),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFF00FF88), width: 2),
-                          boxShadow: [
-                            BoxShadow(color: const Color(0xFF00FF88).withOpacity(0.25), blurRadius: 6),
-                          ],
-                        ),
-                      ),
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.white.withOpacity(0.04),
-                        child: (authorEmail == state.operatorEmail && state.customProfileImagePath != null)
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(24),
-                                child: ResponsiveImage(
-                                  imagePath: state.customProfileImagePath!,
-                                  width: 48,
-                                  height: 48,
-                                  fit: BoxFit.cover,
-                                ),
-                              )
-                            : Icon(avatarIcons[avatar % avatarIcons.length], color: Colors.white, size: 20),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  author.length > 9 ? "${author.substring(0, 7)}..." : author,
-                  style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    } else {
-      // Fallback bubbles matching active operators
-      for (var op in state.activeOperators) {
-        final name = op["name"] ?? "UNKNOWN";
-        final avatarIdx = int.tryParse(op["avatar"] ?? "0") ?? 0;
-        final email = op["email"] ?? "";
-        if (email == state.operatorEmail) continue;
+    // 2. Real Active Stories ONLY (No fake generated ones)
+    for (var story in state.devgramStories) {
+      final author = story["authorName"]?.toString() ?? "OPERATOR";
+      final avatar = story["avatarIndex"] ?? 0;
+      final authorEmail = story["authorEmail"]?.toString() ?? "";
 
-        storyBubbles.add(
-          Padding(
-            padding: const EdgeInsets.only(right: 14.0),
-            child: Column(
-              children: [
-                InkWell(
-                  onTap: () {
-                    // Launch mock story player
-                    final mockStory = {
-                      "authorName": name,
-                      "imageUrl": "https://picsum.photos/seed/${name}story/600/1000",
-                    };
-                    _showStoryViewer(context, mockStory, themeColor);
-                  },
-                  borderRadius: BorderRadius.circular(32),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: themeColor.withOpacity(0.4), width: 1.5),
-                        ),
+      storyBubbles.add(
+        Padding(
+          padding: const EdgeInsets.only(right: 14.0),
+          child: Column(
+            children: [
+              InkWell(
+                onTap: () => _showStoryViewer(context, story, themeColor),
+                borderRadius: BorderRadius.circular(32),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFF00FF88), width: 2),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFF00FF88).withValues(alpha: 0.3), blurRadius: 6),
+                        ],
                       ),
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.white.withOpacity(0.03),
-                        child: Icon(avatarIcons[avatarIdx % avatarIcons.length], color: CyberTheme.textMuted, size: 20),
-                      ),
-                    ],
-                  ),
+                    ),
+                    _buildOperatorAvatar(
+                      email: authorEmail,
+                      name: authorNameFrom(author),
+                      avatarIdx: avatar,
+                      state: state,
+                      radius: 24,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  name.length > 9 ? "${name.substring(0, 7)}..." : name,
-                  style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white70),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                author.length > 9 ? "${author.substring(0, 7)}..." : author,
+                style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white),
+              ),
+            ],
           ),
-        );
-      }
+        ),
+      );
     }
 
     return Scaffold(
@@ -684,7 +915,7 @@ class _DevGramScreenState extends State<DevGramScreen> {
                   children: [
                     Text("DEVGRAM CORE", style: CyberTheme.titleStyle(fontSize: isMobile ? 18 : 22)),
                     Text(
-                      "CONNECTING OPERATORS WORLDWIDE IN PROCEDURAL CHANNELS",
+                      "LIVE OPERATOR TRANSMISSIONS ONLY • AUTHENTIC GRID LOGS",
                       style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
                     ),
                   ],
@@ -697,10 +928,12 @@ class _DevGramScreenState extends State<DevGramScreen> {
                       tooltip: "Direct Signals",
                     ),
                     IconButton(
-                      onPressed: state.isFetchingPosts ? null : () {
-                        state.fetchDevgramPosts();
-                        state.fetchDevgramStories();
-                      },
+                      onPressed: state.isFetchingPosts
+                          ? null
+                          : () {
+                              state.fetchDevgramPosts();
+                              state.fetchDevgramStories();
+                            },
                       icon: state.isFetchingPosts
                           ? const SizedBox(
                               width: 18,
@@ -708,7 +941,7 @@ class _DevGramScreenState extends State<DevGramScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
                             )
                           : Icon(Icons.sync_rounded, color: themeColor, size: 22),
-                      tooltip: "Sync Social Nodes",
+                      tooltip: "Sync Live Network",
                     ),
                   ],
                 ),
@@ -725,7 +958,7 @@ class _DevGramScreenState extends State<DevGramScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Scrollable posts feed
+            // Posts feed
             if (state.isFetchingPosts && state.devgramPosts.isEmpty)
               Center(
                 child: Padding(
@@ -734,10 +967,55 @@ class _DevGramScreenState extends State<DevGramScreen> {
                 ),
               )
             else if (state.devgramPosts.isEmpty)
+              // Sleek Cyber Empty State
               Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 40.0),
-                  child: Text("NO SIGNALS IN DEVGRAM NODE.", style: CyberTheme.monospaceStyle(color: CyberTheme.textMuted)),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 24),
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.02),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: themeColor.withValues(alpha: 0.2)),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: themeColor.withValues(alpha: 0.08),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: themeColor.withValues(alpha: 0.4)),
+                        ),
+                        child: Icon(Icons.rss_feed_rounded, color: themeColor, size: 36),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        "NO TRANSMISSIONS YET",
+                        style: CyberTheme.headingStyle(fontSize: 14, color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Real-time grid feed is online. Only authentic posts created by logged-in operators will appear here. No generated or mock content.",
+                        style: CyberTheme.bodyStyle(fontSize: 11, color: CyberTheme.textMuted),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      NeonButton(
+                        onPressed: () => _showCreatePostModal(context, state, themeColor),
+                        glowColor: themeColor,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 16),
+                            const SizedBox(width: 8),
+                            Text("BROADCAST FIRST TRANSMISSION", style: CyberTheme.headingStyle(fontSize: 9.5, color: Colors.white)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               )
             else
@@ -748,7 +1026,7 @@ class _DevGramScreenState extends State<DevGramScreen> {
                 itemBuilder: (context, index) {
                   final post = state.devgramPosts[index];
                   final String postId = post["id"] ?? "post_$index";
-                  final String author = post["authorName"] ?? "UNKNOWN";
+                  final String author = post["authorName"] ?? "OPERATOR";
                   final String email = post["authorEmail"] ?? "";
                   final int avatarIdx = post["avatarIndex"] ?? 0;
                   final String caption = post["caption"] ?? "";
@@ -758,16 +1036,18 @@ class _DevGramScreenState extends State<DevGramScreen> {
                   final String timestamp = post["timestamp"] ?? "";
 
                   final isLiked = likes.contains(state.operatorEmail);
+                  final isMyPost = email.toLowerCase().trim() == state.operatorEmail.toLowerCase().trim();
+                  final commentCtrl = _getCommentController(postId);
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 24),
                     child: GlassContainer(
-                      borderColor: themeColor.withOpacity(0.15),
+                      borderColor: themeColor.withValues(alpha: 0.15),
                       padding: const EdgeInsets.all(0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Post Header (links to profile explorer)
+                          // Post Header
                           Padding(
                             padding: const EdgeInsets.all(12.0),
                             child: Row(
@@ -777,28 +1057,31 @@ class _DevGramScreenState extends State<DevGramScreen> {
                                   borderRadius: BorderRadius.circular(4),
                                   child: Row(
                                     children: [
-                                      CircleAvatar(
+                                      _buildOperatorAvatar(
+                                        email: email,
+                                        name: author,
+                                        avatarIdx: avatarIdx,
+                                        state: state,
                                         radius: 16,
-                                        backgroundColor: themeColor.withOpacity(0.1),
-                                        child: (email == state.operatorEmail && state.customProfileImagePath != null)
-                                            ? ClipRRect(
-                                                borderRadius: BorderRadius.circular(16),
-                                                child: ResponsiveImage(
-                                                  imagePath: state.customProfileImagePath!,
-                                                  width: 32,
-                                                  height: 32,
-                                                  fit: BoxFit.cover,
-                                                ),
-                                              )
-                                            : Icon(avatarIcons[avatarIdx % avatarIcons.length], color: themeColor, size: 16),
+                                        borderColor: themeColor.withValues(alpha: 0.4),
                                       ),
                                       const SizedBox(width: 10),
                                       Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            author,
-                                            style: CyberTheme.monospaceStyle(fontSize: 11, color: Colors.white),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                author,
+                                                style: CyberTheme.monospaceStyle(fontSize: 11, color: Colors.white),
+                                              ),
+                                              if ((isMyPost && state.isOperatorVerified) ||
+                                                  state.activeOperators.any((op) => op["email"] == email && op["is_verified"]?.toString() == "1")) ...[
+                                                const SizedBox(width: 4),
+                                                const Icon(Icons.verified_rounded, color: Color(0xFF00E5FF), size: 12),
+                                              ],
+                                            ],
                                           ),
                                           Text(
                                             email,
@@ -810,19 +1093,52 @@ class _DevGramScreenState extends State<DevGramScreen> {
                                   ),
                                 ),
                                 const Spacer(),
+
+                                // Delete option if my post
+                                if (isMyPost)
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                                    tooltip: "Delete Transmission",
+                                    onPressed: () async {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (c) => AlertDialog(
+                                          backgroundColor: const Color(0xFF0D1117),
+                                          title: Text("PURGE TRANSMISSION?", style: CyberTheme.headingStyle(fontSize: 12, color: Colors.redAccent)),
+                                          content: Text("Are you sure you want to permanently delete this post?", style: CyberTheme.bodyStyle(fontSize: 11, color: Colors.white70)),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(c, false),
+                                              child: Text("CANCEL", style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white54)),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(c, true),
+                                              child: Text("PURGE", style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.redAccent)),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+
+                                      if (confirm == true) {
+                                        await state.deleteDevgramPost(postId);
+                                      }
+                                    },
+                                  ),
+
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.04),
+                                    color: const Color(0xFF00FF88).withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFF00FF88).withValues(alpha: 0.3), width: 0.5),
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(Icons.link_rounded, color: Colors.white30, size: 10),
+                                      const Icon(Icons.fiber_manual_record_rounded, color: Color(0xFF00FF88), size: 6),
                                       const SizedBox(width: 4),
                                       Text(
-                                        "CONNECTED",
-                                        style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white30),
+                                        "AUTHENTIC",
+                                        style: CyberTheme.monospaceStyle(fontSize: 7.5, color: const Color(0xFF00FF88)),
                                       ),
                                     ],
                                   ),
@@ -831,7 +1147,7 @@ class _DevGramScreenState extends State<DevGramScreen> {
                             ),
                           ),
 
-                          // Post Image (with Double-Tap support)
+                          // Post Image / 3D Avatar / Code Box
                           if (imageUrl.isNotEmpty)
                             GestureDetector(
                               onDoubleTap: () {
@@ -850,18 +1166,34 @@ class _DevGramScreenState extends State<DevGramScreen> {
                               child: Stack(
                                 alignment: Alignment.center,
                                 children: [
-                                  ResponsiveImage(
-                                    imagePath: imageUrl,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                    errorWidget: Container(
-                                      height: 200,
-                                      color: Colors.white.withOpacity(0.01),
-                                      child: Center(
-                                        child: Icon(Icons.image_not_supported_rounded, color: themeColor.withOpacity(0.2)),
+                                  if (imageUrl == "avatar_snapshot")
+                                    Container(
+                                      height: 240,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0D1420),
+                                        border: Border.symmetric(
+                                          horizontal: BorderSide(color: themeColor.withValues(alpha: 0.2), width: 0.5),
+                                        ),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: BioAvatarCanvas(
+                                        config: state.activeBioAvatar,
+                                        size: 200,
+                                      ),
+                                    )
+                                  else
+                                    ResponsiveImage(
+                                      imagePath: imageUrl,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                      errorWidget: Container(
+                                        height: 200,
+                                        color: Colors.white.withValues(alpha: 0.01),
+                                        child: Center(
+                                          child: Icon(Icons.image_not_supported_rounded, color: themeColor.withValues(alpha: 0.2)),
+                                        ),
                                       ),
                                     ),
-                                  ),
                                   // Double tap heart pop-up animation
                                   if (_doubleTapHeartVisible[postId] == true)
                                     AnimatedOpacity(
@@ -870,9 +1202,40 @@ class _DevGramScreenState extends State<DevGramScreen> {
                                       child: Icon(
                                         Icons.favorite_rounded,
                                         size: 80,
-                                        color: themeColor.withOpacity(0.9),
+                                        color: themeColor.withValues(alpha: 0.9),
                                       ),
                                     ),
+                                ],
+                              ),
+                            )
+                          else
+                            // Text / DevLog Code Container
+                            Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF060910),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: themeColor.withValues(alpha: 0.2), width: 0.5),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.terminal_rounded, size: 12, color: themeColor),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        "DEVLOG SIGNAL // TRANSMISSION",
+                                        style: CyberTheme.monospaceStyle(fontSize: 7.5, color: themeColor),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    caption,
+                                    style: GoogleFonts.firaCode(fontSize: 11, color: Colors.white, height: 1.4),
+                                  ),
                                 ],
                               ),
                             ),
@@ -902,9 +1265,9 @@ class _DevGramScreenState extends State<DevGramScreen> {
                                   onPressed: () {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        backgroundColor: themeColor.withOpacity(0.2),
+                                        backgroundColor: themeColor.withValues(alpha: 0.2),
                                         content: Text(
-                                          "COGNITIVE LOG DEEP-LINK COMPILING TO CLIPBOARD",
+                                          "TRANSMISSION LINK COPIED TO OPERATOR CLIPBOARD",
                                           style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
                                         ),
                                       ),
@@ -915,7 +1278,7 @@ class _DevGramScreenState extends State<DevGramScreen> {
                                 ),
                                 const Spacer(),
                                 Text(
-                                  timestamp.split('T')[0],
+                                  timestamp.contains('T') ? timestamp.split('T')[0] : timestamp,
                                   style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
                                 ),
                               ],
@@ -927,7 +1290,7 @@ class _DevGramScreenState extends State<DevGramScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 16.0),
                             child: Text(
                               likes.isEmpty
-                                  ? "BE THE FIRST TO SIGNAL DISPATCH"
+                                  ? "BE THE FIRST OPERATOR TO SIGNAL"
                                   : likes.length == 1
                                       ? "SIGNALED BY 1 OPERATOR"
                                       : "SIGNALED BY ${likes.length} OPERATORS",
@@ -936,31 +1299,32 @@ class _DevGramScreenState extends State<DevGramScreen> {
                           ),
                           const SizedBox(height: 6),
 
-                          // Caption Description
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: RichText(
-                              text: TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: "$author: ",
-                                    style: GoogleFonts.shareTechMono(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      fontSize: 12,
+                          // Caption Description (if image was present)
+                          if (imageUrl.isNotEmpty && caption.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: RichText(
+                                text: TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: "$author: ",
+                                      style: GoogleFonts.shareTechMono(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                      ),
                                     ),
-                                  ),
-                                  TextSpan(
-                                    text: caption,
-                                    style: GoogleFonts.spaceGrotesk(
-                                      color: CyberTheme.textMain,
-                                      fontSize: 12,
+                                    TextSpan(
+                                      text: caption,
+                                      style: GoogleFonts.spaceGrotesk(
+                                        color: CyberTheme.textMain,
+                                        fontSize: 12,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
                           const SizedBox(height: 12),
 
                           // Comments List
@@ -968,7 +1332,7 @@ class _DevGramScreenState extends State<DevGramScreen> {
                             const Divider(color: Colors.white10, height: 1),
                             Container(
                               padding: const EdgeInsets.all(12),
-                              color: Colors.black.withOpacity(0.12),
+                              color: Colors.black.withValues(alpha: 0.12),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: comments.map((comm) {
@@ -999,11 +1363,12 @@ class _DevGramScreenState extends State<DevGramScreen> {
                             decoration: const BoxDecoration(
                               border: Border(top: BorderSide(color: Colors.white10)),
                             ),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                             child: Row(
                               children: [
                                 Expanded(
                                   child: TextField(
+                                    controller: commentCtrl,
                                     style: CyberTheme.bodyStyle(fontSize: 11, color: Colors.white),
                                     decoration: InputDecoration(
                                       hintText: "LOG FEEDBACK SIGNAL...",
@@ -1014,7 +1379,8 @@ class _DevGramScreenState extends State<DevGramScreen> {
                                     ),
                                     onSubmitted: (val) {
                                       if (val.trim().isNotEmpty) {
-                                        state.addCommentToDevgramPost(postId, val);
+                                        state.addCommentToDevgramPost(postId, val.trim());
+                                        commentCtrl.clear();
                                       }
                                     },
                                   ),
@@ -1022,15 +1388,11 @@ class _DevGramScreenState extends State<DevGramScreen> {
                                 IconButton(
                                   icon: Icon(Icons.send_rounded, color: themeColor, size: 16),
                                   onPressed: () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: themeColor.withOpacity(0.2),
-                                        content: Text(
-                                          "TAP RETURN/ENTER KEY ON KEYBOARD TO LOG FEEDBACK SIGNAL",
-                                          style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
-                                        ),
-                                      ),
-                                    );
+                                    final text = commentCtrl.text.trim();
+                                    if (text.isNotEmpty) {
+                                      state.addCommentToDevgramPost(postId, text);
+                                      commentCtrl.clear();
+                                    }
                                   },
                                 ),
                               ],
@@ -1051,5 +1413,10 @@ class _DevGramScreenState extends State<DevGramScreen> {
         child: const Icon(Icons.add_a_photo_rounded, color: Colors.black),
       ),
     );
+  }
+
+  String authorNameFrom(String raw) {
+    if (raw.isEmpty) return "OPERATOR";
+    return raw;
   }
 }

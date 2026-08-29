@@ -9,6 +9,7 @@ class NeonButton extends StatefulWidget {
   final double borderRadius;
   final double? width;
   final double? height;
+  final EdgeInsetsGeometry? padding;
 
   const NeonButton({
     super.key,
@@ -19,6 +20,7 @@ class NeonButton extends StatefulWidget {
     this.borderRadius = 8.0,
     this.width,
     this.height,
+    this.padding,
   });
 
   @override
@@ -99,7 +101,11 @@ class _NeonButtonState extends State<NeonButton> with SingleTickerProviderStateM
                       )
                     ],
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            padding: widget.padding ?? (
+              (widget.width != null || widget.height != null)
+                ? const EdgeInsets.symmetric(horizontal: 10, vertical: 4)
+                : const EdgeInsets.symmetric(horizontal: 24, vertical: 12)
+            ),
             alignment: Alignment.center,
             child: widget.child,
           ),

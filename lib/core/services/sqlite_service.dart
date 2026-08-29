@@ -31,7 +31,7 @@ class SqliteService {
     final path = join(documentsDirectory.path, "dream_engine.db");
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -55,6 +55,18 @@ class SqliteService {
             debugPrint("Alter table error (profile_image): $e");
           }
         }
+        if (oldVersion < 5) {
+          try {
+            await db.execute("ALTER TABLE operators ADD COLUMN is_verified INTEGER DEFAULT 0");
+          } catch (e) {
+            debugPrint("Alter table error (is_verified): $e");
+          }
+        }
+        try {
+          await db.execute("CREATE TABLE IF NOT EXISTS app_session (key TEXT PRIMARY KEY, value TEXT)");
+        } catch (e) {
+          debugPrint("Create app_session error: $e");
+        }
       },
     );
   }
@@ -72,7 +84,15 @@ class SqliteService {
         password TEXT,
         bio TEXT,
         profile_image TEXT,
+        is_verified INTEGER DEFAULT 0,
         has_logged_in INTEGER DEFAULT 0
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE app_session (
+        key TEXT PRIMARY KEY,
+        value TEXT
       )
     ''');
 
@@ -135,7 +155,7 @@ class SqliteService {
       )
     ''');
 
-    // Seeding initial simulated data
+    // Seeding initial operators
     for (var u in _simulatedUsers) {
       await db.insert('operators', {
         'email': u['email'],
@@ -146,47 +166,6 @@ class SqliteService {
         'ping': u['ping'],
         'phone': u['phone'],
         'password': 'password', // default password
-      });
-    }
-
-    for (var p in _simulatedPosts) {
-      await db.insert('devgram_posts', {
-        'id': p['id'],
-        'authorName': p['authorName'],
-        'authorEmail': p['authorEmail'],
-        'avatarIndex': p['avatarIndex'],
-        'caption': p['caption'],
-        'imageUrl': p['imageUrl'],
-        'timestamp': p['timestamp'],
-      });
-
-      final likes = List<String>.from(p['likes'] ?? []);
-      for (var likeEmail in likes) {
-        await db.insert('post_likes', {
-          'post_id': p['id'],
-          'email': likeEmail,
-        });
-      }
-
-      final comments = List<Map<String, dynamic>>.from(p['comments'] ?? []);
-      for (var comment in comments) {
-        await db.insert('post_comments', {
-          'post_id': p['id'],
-          'author': comment['author'],
-          'text': comment['text'],
-          'timestamp': comment['timestamp'],
-        });
-      }
-    }
-
-    for (var s in _simulatedStories) {
-      await db.insert('devgram_stories', {
-        'id': s['id'],
-        'authorName': s['authorName'],
-        'authorEmail': s['authorEmail'],
-        'avatarIndex': s['avatarIndex'],
-        'imageUrl': s['imageUrl'],
-        'timestamp': s['timestamp'],
       });
     }
 
@@ -203,77 +182,8 @@ class SqliteService {
   // Simulated offline operator dossier database (as fallback for web/memory)
   static final List<Map<String, String>> _simulatedUsers = [];
 
-  static final List<Map<String, dynamic>> _simulatedPosts = [
-    {
-      "id": "post_1",
-      "authorName": "VESPER_NET",
-      "authorEmail": "vesper.x@cybernet.io",
-      "avatarIndex": 1,
-      "caption": "Procedurally compiled a new cyberpunk neon skyline! The voxel renderer handles 50k+ nodes now without lagging. #VoxelEngine #Cyberpunk",
-      "imageUrl": "https://picsum.photos/seed/cyberskyline/600/400",
-      "likes": ["kaelen.net@arasaka.corp"],
-      "comments": [
-        {
-          "author": "KAELEN_FIXER",
-          "text": "Sick! What shader techniques did you use for the emissive glow?",
-          "timestamp": "2026-06-03T11:45:00Z"
-        },
-        {
-          "author": "AEGIS_PILOT",
-          "text": "The anti-aliasing looks super clean. Excellent work.",
-          "timestamp": "2026-06-03T12:10:00Z"
-        }
-      ],
-      "timestamp": "2026-06-03T10:30:00Z"
-    },
-    {
-      "id": "post_2",
-      "authorName": "KAELEN_FIXER",
-      "authorEmail": "kaelen.net@arasaka.corp",
-      "avatarIndex": 2,
-      "caption": "Calibrated the suspension and torque parameters on the vehicle physics simulator today. Check out this hill climbing run! #PhysicsEngine #GameDev",
-      "imageUrl": "https://picsum.photos/seed/physicsrun/600/400",
-      "likes": ["vesper.x@cybernet.io", "orion.prime@orbit.org"],
-      "comments": [
-        {
-          "author": "VESPER_NET",
-          "text": "Nice drift! Suspension load distribution looks stable.",
-          "timestamp": "2026-06-03T12:05:00Z"
-        }
-      ],
-      "timestamp": "2026-06-03T11:20:00Z"
-    },
-    {
-      "id": "post_3",
-      "authorName": "AEGIS_PILOT",
-      "authorEmail": "aegis9.droid@security.net",
-      "avatarIndex": 3,
-      "caption": "Constructed a multiplayer matchmaking sub-layer today. Pings are hitting <15ms on local cluster test scripts. #Netcode #Multiplayer",
-      "imageUrl": "https://picsum.photos/seed/netcode/600/400",
-      "likes": ["vesper.x@cybernet.io"],
-      "comments": [],
-      "timestamp": "2026-06-03T09:15:00Z"
-    }
-  ];
-
-  static final List<Map<String, dynamic>> _simulatedStories = [
-    {
-      "id": "story_1",
-      "authorName": "VESPER_NET",
-      "authorEmail": "vesper.x@cybernet.io",
-      "avatarIndex": 1,
-      "imageUrl": "https://picsum.photos/seed/vesperstory/600/1000",
-      "timestamp": "2026-06-03T11:00:00Z"
-    },
-    {
-      "id": "story_2",
-      "authorName": "KAELEN_FIXER",
-      "authorEmail": "kaelen.net@arasaka.corp",
-      "avatarIndex": 2,
-      "imageUrl": "https://picsum.photos/seed/kaelenstory/600/1000",
-      "timestamp": "2026-06-03T11:30:00Z"
-    }
-  ];
+  static final List<Map<String, dynamic>> _simulatedPosts = [];
+  static final List<Map<String, dynamic>> _simulatedStories = [];
 
   static final List<Map<String, dynamic>> _simulatedMessages = [
     {
@@ -302,6 +212,7 @@ class SqliteService {
   static final List<Map<String, dynamic>> _webStories = List.from(_simulatedStories);
   static final List<Map<String, dynamic>> _webMessages = List.from(_simulatedMessages);
   static final List<Map<String, String>> _webOtps = [];
+  static final Map<String, String> _webSession = {};
 
   static Future<bool> verifyUserExists(String identifier) async {
     final cleanId = identifier.toLowerCase().trim();
@@ -493,6 +404,148 @@ class SqliteService {
     return code;
   }
 
+  static Future<bool> isUsernameTaken(String name, {String? excludeEmail}) async {
+    final cleanName = name.trim().toLowerCase();
+    if (cleanName.isEmpty) return false;
+    final cleanExclude = excludeEmail?.trim().toLowerCase();
+
+    if (_useFallback) {
+      return _webUsers.any((u) {
+        final uEmail = (u["email"] ?? "").trim().toLowerCase();
+        final uName = (u["name"] ?? "").trim().toLowerCase();
+        if (cleanExclude != null && cleanExclude.isNotEmpty && uEmail == cleanExclude) {
+          return false;
+        }
+        return uName == cleanName;
+      });
+    }
+
+    try {
+      final db = await database;
+      List<Map<String, dynamic>> results;
+      if (cleanExclude != null && cleanExclude.isNotEmpty) {
+        results = await db.query(
+          'operators',
+          where: 'LOWER(name) = ? AND LOWER(email) != ?',
+          whereArgs: [cleanName, cleanExclude],
+        );
+      } else {
+        results = await db.query(
+          'operators',
+          where: 'LOWER(name) = ?',
+          whereArgs: [cleanName],
+        );
+      }
+      return results.isNotEmpty;
+    } catch (e) {
+      debugPrint("[SqliteService] isUsernameTaken error: $e");
+      return false;
+    }
+  }
+
+  static Future<void> saveActiveSession(String email) async {
+    final cleanEmail = email.toLowerCase().trim();
+    if (cleanEmail.isEmpty) return;
+
+    if (_useFallback) {
+      _webSession['active_user_email'] = cleanEmail;
+      return;
+    }
+
+    try {
+      final db = await database;
+      await db.execute('CREATE TABLE IF NOT EXISTS app_session (key TEXT PRIMARY KEY, value TEXT)');
+      await db.insert(
+        'app_session',
+        {
+          'key': 'active_user_email',
+          'value': cleanEmail,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (e) {
+      debugPrint("[SqliteService] saveActiveSession error: $e");
+    }
+  }
+
+  static Future<String?> getActiveSession() async {
+    if (_useFallback) {
+      if (_webSession.containsKey('active_user_email')) {
+        return _webSession['active_user_email'];
+      }
+      final loggedIn = _webUsers.where((u) => u["has_logged_in"] == "1").toList();
+      if (loggedIn.isNotEmpty) {
+        return loggedIn.last["email"];
+      }
+      return null;
+    }
+
+    try {
+      final db = await database;
+      await db.execute('CREATE TABLE IF NOT EXISTS app_session (key TEXT PRIMARY KEY, value TEXT)');
+      final res = await db.query(
+        'app_session',
+        where: 'key = ?',
+        whereArgs: ['active_user_email'],
+      );
+      if (res.isNotEmpty) {
+        final email = res.first['value']?.toString();
+        if (email != null && email.isNotEmpty) return email;
+      }
+      final opRes = await db.query(
+        'operators',
+        where: 'has_logged_in = 1',
+        orderBy: 'ROWID DESC',
+        limit: 1,
+      );
+      if (opRes.isNotEmpty) {
+        return opRes.first['email']?.toString();
+      }
+    } catch (e) {
+      debugPrint("[SqliteService] getActiveSession error: $e");
+    }
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> getOperatorByEmail(String email) async {
+    final cleanEmail = email.toLowerCase().trim();
+    if (cleanEmail.isEmpty) return null;
+
+    if (_useFallback) {
+      final idx = _webUsers.indexWhere((u) => (u["email"] ?? "").toLowerCase().trim() == cleanEmail);
+      if (idx >= 0) return Map<String, dynamic>.from(_webUsers[idx]);
+      return null;
+    }
+
+    try {
+      final db = await database;
+      final res = await db.query(
+        'operators',
+        where: 'LOWER(email) = ?',
+        whereArgs: [cleanEmail],
+      );
+      if (res.isNotEmpty) {
+        return Map<String, dynamic>.from(res.first);
+      }
+    } catch (e) {
+      debugPrint("[SqliteService] getOperatorByEmail error: $e");
+    }
+    return null;
+  }
+
+  static Future<void> clearActiveSession() async {
+    if (_useFallback) {
+      _webSession.remove('active_user_email');
+      return;
+    }
+    try {
+      final db = await database;
+      await db.delete('app_session', where: 'key = ?', whereArgs: ['active_user_email']);
+    } catch (e) {
+      debugPrint("[SqliteService] clearActiveSession error: $e");
+    }
+  }
+
   static Future<bool> registerUser({
     required String email,
     required String password,
@@ -502,6 +555,14 @@ class SqliteService {
   }) async {
     final cleanPhone = phone.trim();
     final cleanEmail = email.toLowerCase().trim();
+    final cleanName = name.trim().toUpperCase();
+
+    // Check if username is already taken
+    final nameTaken = await isUsernameTaken(cleanName);
+    if (nameTaken) {
+      debugPrint("[SqliteService] Registration failed: Username '$cleanName' is already taken.");
+      return false;
+    }
 
     if (_useFallback) {
       final exists = _webUsers.any((u) => u["email"]?.toLowerCase() == cleanEmail);
@@ -510,8 +571,8 @@ class SqliteService {
         return false;
       }
       _webUsers.add({
-        "email": email,
-        "name": name.toUpperCase(),
+        "email": cleanEmail,
+        "name": cleanName,
         "ping": "3ms",
         "status": "ONLINE",
         "role": "JUNIOR SYSTEM CODER",
@@ -519,8 +580,10 @@ class SqliteService {
         "phone": cleanPhone,
         "bio": "Procedurally compiling realities since seed 0x4B291A. Specializes in advanced particle synthesis.",
         "profile_image": "",
-        "has_logged_in": "0",
+        "has_logged_in": "1",
+        "is_verified": "0",
       });
+      await saveActiveSession(cleanEmail);
       debugPrint("[SqliteService] SimDB: Registered local account: $email");
       return true;
     }
@@ -538,8 +601,8 @@ class SqliteService {
       }
 
       await db.insert('operators', {
-        'email': email,
-        'name': name.toUpperCase(),
+        'email': cleanEmail,
+        'name': cleanName,
         'avatar': avatarIndex.toString(),
         'role': 'JUNIOR SYSTEM CODER',
         'status': 'ONLINE',
@@ -548,8 +611,10 @@ class SqliteService {
         'password': password,
         'bio': 'Procedurally compiling realities since seed 0x4B291A. Specializes in advanced particle synthesis.',
         'profile_image': null,
-        'has_logged_in': 0,
+        'has_logged_in': 1,
+        'is_verified': 0,
       });
+      await saveActiveSession(cleanEmail);
       debugPrint("[SqliteService] DB: Registered account: $email");
       return true;
     } catch (e) {
@@ -575,6 +640,8 @@ class SqliteService {
       if (idx >= 0) {
         _webUsers[idx]["status"] = "ONLINE";
         _webUsers[idx]["has_logged_in"] = "1";
+        final userEmail = _webUsers[idx]["email"] ?? searchKey;
+        await saveActiveSession(userEmail);
         debugPrint("[SqliteService] SimDB: Operator authenticated and marked ONLINE: $searchKey");
         return _webUsers[idx];
       }
@@ -620,6 +687,7 @@ class SqliteService {
         );
         user['status'] = 'ONLINE';
         user['has_logged_in'] = 1;
+        await saveActiveSession(user['email'].toString());
         debugPrint("[SqliteService] DB: Operator authenticated and marked ONLINE: $searchKey");
         return user;
       }
@@ -632,6 +700,7 @@ class SqliteService {
   }
 
   static Future<bool> updateOperatorProfile({
+    String? oldEmail,
     required String email,
     required String name,
     required int avatarIndex,
@@ -639,15 +708,29 @@ class SqliteService {
     required String bio,
     String? profileImage,
   }) async {
+    final cleanOldEmail = (oldEmail != null && oldEmail.trim().isNotEmpty)
+        ? oldEmail.toLowerCase().trim()
+        : email.toLowerCase().trim();
     final cleanEmail = email.toLowerCase().trim();
+    final cleanName = name.trim().toUpperCase();
+
+    // Check if new username is already taken by someone else
+    final nameTaken = await isUsernameTaken(cleanName, excludeEmail: cleanOldEmail);
+    if (nameTaken) {
+      debugPrint("[SqliteService] Update failed: Username '$cleanName' is already taken.");
+      return false;
+    }
+
     if (_useFallback) {
-      final idx = _webUsers.indexWhere((u) => u["email"]?.toLowerCase() == cleanEmail);
+      final idx = _webUsers.indexWhere((u) => u["email"]?.toLowerCase() == cleanOldEmail);
       if (idx >= 0) {
-        _webUsers[idx]["name"] = name;
+        _webUsers[idx]["email"] = cleanEmail;
+        _webUsers[idx]["name"] = cleanName;
         _webUsers[idx]["avatar"] = avatarIndex.toString();
         _webUsers[idx]["role"] = role;
         _webUsers[idx]["bio"] = bio;
         _webUsers[idx]["profile_image"] = profileImage ?? "";
+        await saveActiveSession(cleanEmail);
         return true;
       }
       return false;
@@ -655,18 +738,32 @@ class SqliteService {
 
     try {
       final db = await database;
+      await db.execute('CREATE TABLE IF NOT EXISTS app_session (key TEXT PRIMARY KEY, value TEXT)');
+
       await db.update(
         'operators',
         {
-          'name': name,
+          'email': cleanEmail,
+          'name': cleanName,
           'avatar': avatarIndex.toString(),
           'role': role,
           'bio': bio,
           'profile_image': profileImage,
         },
         where: 'LOWER(email) = ?',
-        whereArgs: [cleanEmail],
+        whereArgs: [cleanOldEmail],
       );
+
+      // If email changed, propagate to related tables
+      if (cleanOldEmail != cleanEmail) {
+        await db.update('devgram_posts', {'authorEmail': cleanEmail, 'authorName': cleanName}, where: 'LOWER(authorEmail) = ?', whereArgs: [cleanOldEmail]);
+        await db.update('devgram_stories', {'authorEmail': cleanEmail, 'authorName': cleanName}, where: 'LOWER(authorEmail) = ?', whereArgs: [cleanOldEmail]);
+        await db.update('devgram_messages', {'sender': cleanEmail}, where: 'LOWER(sender) = ?', whereArgs: [cleanOldEmail]);
+        await db.update('devgram_messages', {'recipient': cleanEmail}, where: 'LOWER(recipient) = ?', whereArgs: [cleanOldEmail]);
+        await db.update('post_likes', {'email': cleanEmail}, where: 'LOWER(email) = ?', whereArgs: [cleanOldEmail]);
+      }
+
+      await saveActiveSession(cleanEmail);
       return true;
     } catch (e) {
       debugPrint("[SqliteService] Update operator profile error: $e");
@@ -697,6 +794,7 @@ class SqliteService {
           "role": d["role"]?.toString() ?? "JUNIOR SYSTEM CODER",
           "avatar": d["avatar"]?.toString() ?? "0",
           "phone": d["phone"]?.toString() ?? "",
+          "is_verified": d["is_verified"]?.toString() ?? "0",
         });
       }
       return results;
@@ -704,6 +802,57 @@ class SqliteService {
       debugPrint("[SqliteService] Fetch operators query failed: $e");
       return [];
     }
+  }
+
+  static Future<bool> setOperatorVerified(String email, bool isVerified) async {
+    final searchKey = email.toLowerCase().trim();
+    if (_useFallback) {
+      final idx = _webUsers.indexWhere((u) => (u["email"] ?? "").toLowerCase().trim() == searchKey);
+      if (idx >= 0) {
+        _webUsers[idx]["is_verified"] = isVerified ? "1" : "0";
+      }
+      return true;
+    }
+    try {
+      final db = await database;
+      await db.update(
+        'operators',
+        {'is_verified': isVerified ? 1 : 0},
+        where: 'LOWER(email) = ?',
+        whereArgs: [searchKey],
+      );
+      return true;
+    } catch (e) {
+      debugPrint("[SqliteService] setOperatorVerified error: $e");
+      return false;
+    }
+  }
+
+  static Future<bool> isOperatorVerified(String email) async {
+    final searchKey = email.toLowerCase().trim();
+    if (_useFallback) {
+      final idx = _webUsers.indexWhere((u) => (u["email"] ?? "").toLowerCase().trim() == searchKey);
+      if (idx >= 0) {
+        return _webUsers[idx]["is_verified"]?.toString() == "1";
+      }
+      return false;
+    }
+    try {
+      final db = await database;
+      final results = await db.query(
+        'operators',
+        columns: ['is_verified'],
+        where: 'LOWER(email) = ?',
+        whereArgs: [searchKey],
+      );
+      if (results.isNotEmpty) {
+        final val = results.first['is_verified'];
+        return (val == 1 || val == "1");
+      }
+    } catch (e) {
+      debugPrint("[SqliteService] isOperatorVerified error: $e");
+    }
+    return false;
   }
 
   static Future<List<Map<String, dynamic>>> fetchDevGramPosts() async {
@@ -714,6 +863,8 @@ class SqliteService {
 
     try {
       final db = await database;
+      // Clean up legacy mock generated posts
+      await db.delete('devgram_posts', where: "imageUrl LIKE '%picsum.photos%' OR id = 'post_1' OR id = 'post_2' OR id = 'post_3'");
       final postsQuery = await db.query('devgram_posts', orderBy: 'timestamp DESC');
       final List<Map<String, dynamic>> results = [];
 
@@ -868,6 +1019,24 @@ class SqliteService {
     }
   }
 
+  static Future<bool> deletePost(String postId) async {
+    if (_useFallback) {
+      _webPosts.removeWhere((p) => p["id"] == postId);
+      return true;
+    }
+
+    try {
+      final db = await database;
+      await db.delete('devgram_posts', where: 'id = ?', whereArgs: [postId]);
+      await db.delete('post_likes', where: 'post_id = ?', whereArgs: [postId]);
+      await db.delete('post_comments', where: 'post_id = ?', whereArgs: [postId]);
+      return true;
+    } catch (e) {
+      debugPrint("[SqliteService] Delete post failed: $e");
+      return false;
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> fetchStories() async {
     if (_useFallback) {
       return List<Map<String, dynamic>>.from(_webStories);
@@ -875,6 +1044,8 @@ class SqliteService {
 
     try {
       final db = await database;
+      // Clean up legacy mock generated stories
+      await db.delete('devgram_stories', where: "imageUrl LIKE '%picsum.photos%' OR id = 'story_1' OR id = 'story_2'");
       final query = await db.query('devgram_stories', orderBy: 'timestamp DESC');
       final List<Map<String, dynamic>> results = [];
       for (var s in query) {

@@ -3,8 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dream_engine_ai/core/state/engine_state.dart';
 import 'package:dream_engine_ai/core/theme/cyber_theme.dart';
+import 'package:dream_engine_ai/core/models/bio_avatar.dart';
+import 'package:dream_engine_ai/core/widgets/bio_avatar_canvas.dart';
 import 'package:dream_engine_ai/core/widgets/glass_container.dart';
 import 'package:dream_engine_ai/core/widgets/neon_button.dart';
+import 'package:dream_engine_ai/core/widgets/responsive_image.dart';
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
@@ -135,12 +138,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final String status = profile["status"] ?? "OFFLINE";
     final int avatarIdx = int.tryParse(profile["avatar"] ?? "0") ?? 0;
     final isOnline = status.toUpperCase() == "ONLINE";
-    final realAvatarIcons = [
-      Icons.blur_on_rounded,
-      Icons.face_retouching_natural_rounded,
-      Icons.precision_manufacturing_rounded,
-      Icons.person_pin_rounded,
-    ];
 
     // Filter posts for this specific user
     final operatorPosts = state.devgramPosts.where((post) {
@@ -189,10 +186,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               border: Border.all(color: isOnline ? const Color(0xFF00FF88) : themeColor.withOpacity(0.4), width: 2),
                               color: themeColor.withOpacity(0.06),
                             ),
-                            child: Icon(
-                              realAvatarIcons[avatarIdx % realAvatarIcons.length],
-                              color: isOnline ? Colors.white : themeColor,
-                              size: 34,
+                            child: ClipOval(
+                              child: BioAvatarCanvas(
+                                config: avatarIdx < BioAvatarConfig.presets.length 
+                                    ? BioAvatarConfig.presets[avatarIdx] 
+                                    : state.activeBioAvatar,
+                                size: 72,
+                                showBackground: false,
+                              ),
                             ),
                           ),
                           Positioned(
@@ -217,9 +218,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              name,
-                              style: CyberTheme.titleStyle(fontSize: 18),
+                            Row(
+                              children: [
+                                Text(
+                                  name,
+                                  style: CyberTheme.titleStyle(fontSize: 18),
+                                ),
+                                if ((email.toLowerCase().trim() == state.operatorEmail.toLowerCase().trim() && state.isOperatorVerified) ||
+                                    profile["is_verified"]?.toString() == "1") ...[
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.verified_rounded, color: Color(0xFF00E5FF), size: 16),
+                                ],
+                              ],
                             ),
                             Text(
                               "ROLE: $role",
@@ -345,15 +355,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(7),
                         child: imageUrl.isNotEmpty
-                            ? Image.network(
-                                imageUrl,
+                            ? ResponsiveImage(
+                                imagePath: imageUrl,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  color: Colors.white.withOpacity(0.02),
-                                  child: Center(
-                                    child: Icon(Icons.broken_image_rounded, color: themeColor.withOpacity(0.4)),
-                                  ),
-                                ),
+                                width: double.infinity,
+                                height: double.infinity,
                               )
                             : Container(
                                 color: Colors.white.withOpacity(0.02),

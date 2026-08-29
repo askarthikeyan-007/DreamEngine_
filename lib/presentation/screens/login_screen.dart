@@ -22,8 +22,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _otpController = TextEditingController();
 
   bool _isSignUp = false;
-  int _selectedSignUpAvatar = 0;
-
   bool _showingOtpMethodSelector = false;
   bool _showingOtpInput = false;
   String _otpTargetIdentifier = "";
@@ -96,6 +94,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         return;
       }
 
+      final usernameTaken = await SqliteService.isUsernameTaken(name);
+      if (usernameTaken) {
+        setState(() {
+          _terminalMessage = "ERROR: USERNAME '$name' IS ALREADY TAKEN BY ANOTHER OPERATOR.";
+        });
+        return;
+      }
+
       setState(() {
         _terminalMessage = "REGISTERING OPERATOR DOSSIER IN SQLITE...";
       });
@@ -104,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         email: emailOrPhone,
         password: password,
         name: name,
-        avatarIndex: _selectedSignUpAvatar,
+        avatarIndex: 0,
         phone: phone,
       );
 
@@ -344,62 +350,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         ),
         const SizedBox(height: 16),
 
-        // Portrait Selector (Sign Up Only)
-        if (_isSignUp) ...[
-          Text(
-            "SELECT INITIAL COGNITIVE PORTRAIT",
-            style: CyberTheme.monospaceStyle(fontSize: 9, color: CyberTheme.neonBlue),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: List.generate(4, (idx) {
-              final isSel = _selectedSignUpAvatar == idx;
-              final avatarIcons = [
-                Icons.blur_on_rounded,
-                Icons.face_retouching_natural_rounded,
-                Icons.precision_manufacturing_rounded,
-                Icons.person_pin_rounded,
-              ];
-              final avatarNames = ["Core", "Net", "Drone", "Pilot"];
-              return Expanded(
-                child: InkWell(
-                  onTap: () {
-                    setState(() {
-                      _selectedSignUpAvatar = idx;
-                    });
-                  },
-                  borderRadius: BorderRadius.circular(4),
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSel ? CyberTheme.neonBlue.withOpacity(0.12) : Colors.white.withOpacity(0.02),
-                      border: Border.all(
-                        color: isSel ? CyberTheme.neonBlue : Colors.white10,
-                        width: 1.0,
-                      ),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(avatarIcons[idx], color: isSel ? CyberTheme.neonBlue : Colors.white54, size: 18),
-                        const SizedBox(height: 2),
-                        Text(
-                          avatarNames[idx],
-                          style: CyberTheme.monospaceStyle(fontSize: 8, color: isSel ? Colors.white : Colors.white30),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 24),
-        ] else ...[
-          const SizedBox(height: 8),
-        ],
+        const SizedBox(height: 20),
 
         // Sign In / Sign Up Button
         NeonButton(

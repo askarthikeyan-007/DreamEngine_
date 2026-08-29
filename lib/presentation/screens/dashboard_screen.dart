@@ -9,23 +9,6 @@ import 'package:dream_engine_ai/core/widgets/glass_container.dart';
 import 'package:dream_engine_ai/core/widgets/neon_button.dart';
 import 'package:dream_engine_ai/core/widgets/satellite_world_map.dart';
 
-class _ProjectsData {
-  final String title;
-  final String genre;
-  final double seed;
-  _ProjectsData(this.title, this.genre, this.seed);
-
-  @override
-  bool operator ==(Object other) =>
-      other is _ProjectsData &&
-      other.title == title &&
-      other.genre == genre &&
-      other.seed == seed;
-
-  @override
-  int get hashCode => Object.hash(title, genre, seed);
-}
-
 class _OverridesData {
   final bool rayTracing;
   final String weather;
@@ -70,9 +53,12 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // Customizable HUD layout state
   bool _isCustomizing = false;
+  DateTime _calendarMonth = DateTime.now();
+  DateTime _selectedCalendarDate = DateTime.now();
+
   final List<String> _leftModules = [
     'satellite_map',
-    'projects',
+    'calendar',
     'overrides',
     'news',
   ];
@@ -151,7 +137,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   void _resetHUD() {
     setState(() {
       _leftModules.clear();
-      _leftModules.addAll(['satellite_map', 'projects', 'overrides', 'news']);
+      _leftModules.addAll(['satellite_map', 'calendar', 'overrides', 'news']);
       _rightModules.clear();
       _rightModules.addAll(['operators', 'social', 'visualizer', 'console']);
     });
@@ -297,32 +283,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     switch (moduleName) {
       case 'satellite_map':
         return const SatelliteWorldMap();
-      case 'projects':
-        return Selector<EngineState, _ProjectsData>(
-          selector: (context, state) => _ProjectsData(
-            state.gameTitle,
-            state.gameGenre,
-            state.proceduralSeed,
-          ),
-          builder: (context, data, _) {
-            final tempState = Provider.of<EngineState>(context, listen: false);
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "Procedural Projects",
-                  style: CyberTheme.headingStyle(
-                    fontSize: 16,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _buildProjectsLayout(tempState, themeColor, isMobile),
-              ],
-            );
-          },
-        );
+      case 'calendar':
+        return _buildNormalCalendarWidget(themeColor, isMobile);
       case 'overrides':
         return Selector<EngineState, _OverridesData>(
           selector: (context, state) =>
@@ -858,130 +820,330 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildProjectsLayout(
-    EngineState state,
-    Color themeColor,
-    bool isMobile,
-  ) {
-    return GridView.count(
-      crossAxisCount: isMobile ? 1 : 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: isMobile ? 2.4 : 1.7,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        _buildProjectCard(
-          state.gameTitle,
-          state.gameGenre,
-          "PROCEDURAL SEED: ${state.proceduralSeed.toInt()}",
-          themeColor,
-          true,
-        ),
-        _buildProjectCard(
-          "RETRO RUNNERS",
-          "80s Outrun Racing",
-          "SEED: 9812402 // COMPILED 2D",
-          themeColor,
-          false,
-        ),
-        _buildProjectCard(
-          "CHRONO VOID",
-          "Time-warp Stealth RPG",
-          "SEED: 4182901 // BUILD READY",
-          themeColor,
-          false,
-        ),
-        _buildProjectCard(
-          "AETHER WORLD",
-          "Procedural Sandbox",
-          "SEED: 8812904 // UNCOMPILED",
-          themeColor,
-          false,
-        ),
-      ],
-    );
-  }
+  Widget _buildNormalCalendarWidget(Color themeColor, bool isMobile) {
+    final now = DateTime.now();
+    final firstDayOfMonth = DateTime(_calendarMonth.year, _calendarMonth.month, 1);
+    final daysInMonth = DateTime(_calendarMonth.year, _calendarMonth.month + 1, 0).day;
+    final leadingEmptyDays = firstDayOfMonth.weekday % 7; // Sunday = 0
+    final daysInPrevMonth = DateTime(_calendarMonth.year, _calendarMonth.month, 0).day;
 
-  Widget _buildProjectCard(
-    String title,
-    String genre,
-    String footer,
-    Color themeColor,
-    bool isActive,
-  ) {
-    final state = Provider.of<EngineState>(context, listen: false);
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () {
-          if (isActive) {
-            state.setScreenIndex(6); // Go to Preview page
-          }
-        },
-        child: GlassContainer(
-          borderColor: isActive ? themeColor : Colors.white12,
-          hasGlow: isActive,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final weekdayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+    return GlassContainer(
+      borderColor: themeColor.withValues(alpha: 0.3),
+      hasGlow: true,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header Row: Calendar Title & Current Date Badge
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: CyberTheme.titleStyle(
-                        fontSize: 15,
-                        color: Colors.white,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  Icon(Icons.calendar_month_rounded, color: themeColor, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    "CALENDAR",
+                    style: CyberTheme.headingStyle(fontSize: 16, color: Colors.white),
                   ),
-                  if (isActive)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: themeColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: themeColor, width: 0.5),
-                      ),
-                      child: Text(
-                        "ACTIVE SEED",
-                        style: CyberTheme.monospaceStyle(
-                          fontSize: 8,
-                          color: themeColor,
-                        ),
-                      ),
-                    ),
                 ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                genre,
-                style: CyberTheme.bodyStyle(
-                  fontSize: 12,
-                  color: CyberTheme.textMuted,
+              // Real-time Today badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: themeColor.withValues(alpha: 0.15),
+                  border: Border.all(color: themeColor.withValues(alpha: 0.5)),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-              ),
-              const Spacer(),
-              Text(
-                footer,
-                style: CyberTheme.monospaceStyle(
-                  fontSize: 9,
-                  color: isActive ? themeColor : CyberTheme.textMuted,
+                child: Text(
+                  "${_getWeekDayName(now).toUpperCase()}, ${_getMonthName(now.month).toUpperCase()} ${now.day}, ${now.year}",
+                  style: CyberTheme.monospaceStyle(fontSize: 9, color: themeColor).copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 16),
+
+          // Month & Year Navigator Row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.04),
+              border: Border.all(color: Colors.white10),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Previous Month Button
+                IconButton(
+                  icon: const Icon(Icons.chevron_left_rounded, color: Colors.white, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () {
+                    setState(() {
+                      _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month - 1, 1);
+                    });
+                  },
+                ),
+
+                // Month & Year Display (e.g. AUGUST 2026)
+                Text(
+                  "${_getMonthName(_calendarMonth.month).toUpperCase()} ${_calendarMonth.year}",
+                  style: CyberTheme.titleStyle(fontSize: 16, color: Colors.white),
+                ),
+
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Next Month Button
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 22),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        setState(() {
+                          _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month + 1, 1);
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    // Today jump button
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _calendarMonth = DateTime(now.year, now.month, 1);
+                          _selectedCalendarDate = now;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(4),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: themeColor.withValues(alpha: 0.2),
+                          border: Border.all(color: themeColor.withValues(alpha: 0.6)),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          "TODAY",
+                          style: CyberTheme.monospaceStyle(fontSize: 9, color: themeColor),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Day of the Week Headers (SUN, MON, TUE, WED, THU, FRI, SAT)
+          Row(
+            children: weekdayNames.map((d) {
+              final isWeekend = d == "SUN" || d == "SAT";
+              return Expanded(
+                child: Center(
+                  child: Text(
+                    d,
+                    style: CyberTheme.monospaceStyle(
+                      fontSize: 10,
+                      color: isWeekend ? CyberTheme.cyberPink.withValues(alpha: 0.8) : Colors.white60,
+                    ).copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+
+          // Days Matrix Grid
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              crossAxisSpacing: 6,
+              mainAxisSpacing: 6,
+              childAspectRatio: 1.2,
+            ),
+            itemCount: 42, // Standard 6 weeks grid
+            itemBuilder: (context, index) {
+              if (index < leadingEmptyDays) {
+                // Days from previous month
+                final prevDay = daysInPrevMonth - leadingEmptyDays + index + 1;
+                return Center(
+                  child: Text(
+                    "$prevDay",
+                    style: CyberTheme.bodyStyle(fontSize: 11, color: Colors.white24),
+                  ),
+                );
+              }
+
+              final dayNum = index - leadingEmptyDays + 1;
+              if (dayNum > daysInMonth) {
+                // Days from next month
+                final nextDay = dayNum - daysInMonth;
+                return Center(
+                  child: Text(
+                    "$nextDay",
+                    style: CyberTheme.bodyStyle(fontSize: 11, color: Colors.white24),
+                  ),
+                );
+              }
+
+              final cellDate = DateTime(_calendarMonth.year, _calendarMonth.month, dayNum);
+              final isToday = cellDate.year == now.year && cellDate.month == now.month && cellDate.day == now.day;
+              final isSelected = cellDate.year == _selectedCalendarDate.year &&
+                  cellDate.month == _selectedCalendarDate.month &&
+                  cellDate.day == _selectedCalendarDate.day;
+
+              return MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedCalendarDate = cellDate;
+                    });
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    decoration: BoxDecoration(
+                      color: isToday
+                          ? themeColor.withValues(alpha: 0.25)
+                          : isSelected
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Colors.white.withValues(alpha: 0.03),
+                      border: Border.all(
+                        color: isToday
+                            ? themeColor
+                            : isSelected
+                                ? Colors.white60
+                                : Colors.white10,
+                        width: isToday ? 1.5 : 1.0,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                      boxShadow: isToday ? CyberTheme.neonGlow(color: themeColor, blurRadius: 8) : null,
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Text(
+                          "$dayNum",
+                          style: CyberTheme.bodyStyle(
+                            fontSize: 12,
+                            color: isToday
+                                ? Colors.white
+                                : isSelected
+                                    ? themeColor
+                                    : Colors.white.withValues(alpha: 0.9),
+                          ).copyWith(fontWeight: isToday || isSelected ? FontWeight.bold : FontWeight.normal),
+                        ),
+                        if (isToday)
+                          Positioned(
+                            bottom: 2,
+                            child: Container(
+                              width: 4,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: themeColor,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+
+          // Selected Date Details Card
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.03),
+              border: Border.all(color: themeColor.withValues(alpha: 0.25)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "SELECTED DATE",
+                        style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "${_getWeekDayName(_selectedCalendarDate)}, ${_getMonthName(_selectedCalendarDate.month)} ${_selectedCalendarDate.day}, ${_selectedCalendarDate.year}",
+                        style: CyberTheme.headingStyle(fontSize: 13, color: Colors.white),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.greenAccent.withValues(alpha: 0.12),
+                    border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.4)),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.greenAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "ACTIVE SPRINT",
+                        style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.greenAccent),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  String _getWeekDayName(DateTime dt) {
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    return days[dt.weekday - 1];
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ];
+    return months[month - 1];
   }
 
   Widget _buildOverridesLayout(EngineState state, Color themeColor) {
@@ -1365,9 +1527,9 @@ class _DashboardScreenState extends State<DashboardScreen>
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10.0),
               child: Text(
-                "SYNCING DEVGRAM FEED NODES...",
+                "NO TRANSMISSIONS YET • BE THE FIRST TO POST",
                 style: CyberTheme.monospaceStyle(
-                  fontSize: 9,
+                  fontSize: 8.5,
                   color: CyberTheme.textMuted,
                 ),
                 textAlign: TextAlign.center,

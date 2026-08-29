@@ -5,6 +5,7 @@ import 'package:dream_engine_ai/core/state/engine_state.dart';
 import 'package:dream_engine_ai/core/theme/cyber_theme.dart';
 import 'package:dream_engine_ai/core/widgets/glass_container.dart';
 import 'package:dream_engine_ai/core/widgets/neon_button.dart';
+import 'package:dream_engine_ai/core/services/voice_assistant_helper.dart';
 
 class _PromptScreenData {
   final bool isGenerating;
@@ -62,16 +63,10 @@ class PromptScreen extends StatefulWidget {
 }
 
 class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderStateMixin {
-  final _promptController = TextEditingController(text: "Create a futuristic cyberpunk open-world game");
+  final _promptController = TextEditingController();
   late AnimationController _waveController;
   bool _isListening = false;
-
-  final List<String> _quickPrompts = [
-    "Create a futuristic cyberpunk open-world game",
-    "Space orbit station simulator with zero-gravity combat",
-    "Procedural wasteland survival sandbox with dynamic weather",
-    "Synthwave hacker deck simulator under neon sky"
-  ];
+  String _voiceStatusText = "";
 
   @override
   void initState() {
@@ -90,14 +85,53 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
   }
 
   void _toggleVoiceListening() {
-    setState(() {
-      _isListening = !_isListening;
-      if (_isListening) {
-        _waveController.repeat();
-      } else {
+    if (_isListening) {
+      VoiceAssistantService.instance.stopListening();
+      setState(() {
+        _isListening = false;
         _waveController.stop();
-      }
-    });
+        _voiceStatusText = "";
+      });
+    } else {
+      setState(() {
+        _isListening = true;
+        _waveController.repeat();
+        _voiceStatusText = "VOICE ASSISTANT LISTENING... [ Speak your game prompt, Operator ]";
+      });
+
+      VoiceAssistantService.instance.startListening(
+        onResult: (text, isFinal) {
+          if (!mounted) return;
+          setState(() {
+            _promptController.text = text;
+            _voiceStatusText = isFinal ? "PROMPT CAPTURED: \"$text\"" : "TRANSCRIPTION: \"$text\"";
+          });
+
+          if (isFinal && text.trim().isNotEmpty) {
+            VoiceAssistantService.instance.speak("Synthesizing $text now.");
+            Future.delayed(const Duration(milliseconds: 700), () {
+              if (mounted) {
+                _triggerGeneration(context);
+              }
+            });
+          }
+        },
+        onStateChange: (isListening, error) {
+          if (!mounted) return;
+          setState(() {
+            _isListening = isListening;
+            if (isListening) {
+              _waveController.repeat();
+            } else {
+              _waveController.stop();
+              if (error != null) {
+                _voiceStatusText = "VOICE ERROR: $error";
+              }
+            }
+          });
+        },
+      );
+    }
   }
 
   void _triggerGeneration(BuildContext context) {
@@ -159,15 +193,9 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          "PROMPT MATRIX INJECTOR",
-                                          style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
-                                        ),
-                                        Icon(Icons.psychology_rounded, color: CyberTheme.textMuted, size: 18),
-                                      ],
+                                    Text(
+                                      "PROMPT MATRIX INJECTOR",
+                                      style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
                                     ),
                                     const SizedBox(height: 12),
                                     Expanded(
@@ -186,49 +214,24 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 16),
-
-                            // Suggested Prompts
-                            Text(
-                              "TEMPLATE PILLS",
-                              style: CyberTheme.monospaceStyle(fontSize: 10, color: CyberTheme.textMuted),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _quickPrompts.map((p) {
-                                final isSelected = _promptController.text == p;
-                                return InkWell(
-                                  onTap: () {
-                                    setState(() {
-                                      _promptController.text = p;
-                                    });
-                                  },
+                            // Live Voice Status indicator (mobile)
+                            if (_voiceStatusText.isNotEmpty) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: CyberTheme.cyberPink.withValues(alpha: 0.12),
+                                  border: Border.all(color: CyberTheme.cyberPink.withValues(alpha: 0.4)),
                                   borderRadius: BorderRadius.circular(4),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: isSelected ? themeColor.withOpacity(0.15) : Colors.white.withOpacity(0.04),
-                                      border: Border.all(
-                                        color: isSelected ? themeColor : Colors.white10,
-                                        width: 1.0,
-                                      ),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      p,
-                                      style: CyberTheme.bodyStyle(
-                                        fontSize: 11,
-                                        color: isSelected ? Colors.white : CyberTheme.textMuted,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                            const SizedBox(height: 20),
+                                ),
+                                child: Text(
+                                  _voiceStatusText,
+                                  style: CyberTheme.monospaceStyle(fontSize: 8.5, color: CyberTheme.cyberPink),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                            ],
 
                             // Controls row (Voice mic + Generate button)
                             Row(
@@ -241,8 +244,16 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
                                     width: 44,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      border: Border.all(color: _isListening ? CyberTheme.cyberPink : themeColor.withOpacity(0.3)),
-                                      color: (_isListening ? CyberTheme.cyberPink : themeColor).withOpacity(0.1),
+                                      border: Border.all(color: _isListening ? CyberTheme.cyberPink : themeColor.withValues(alpha: 0.3)),
+                                      color: (_isListening ? CyberTheme.cyberPink : themeColor).withValues(alpha: _isListening ? 0.25 : 0.1),
+                                      boxShadow: [
+                                        if (_isListening)
+                                          BoxShadow(
+                                            color: CyberTheme.cyberPink.withValues(alpha: 0.4),
+                                            blurRadius: 12,
+                                            spreadRadius: 2,
+                                          ),
+                                      ],
                                     ),
                                     child: Icon(
                                       _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
@@ -254,7 +265,7 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
                                 const SizedBox(width: 12),
                                 if (_isListening)
                                   Expanded(
-                                    child: Container(
+                                    child: SizedBox(
                                       height: 44,
                                       child: AnimatedBuilder(
                                         animation: _waveController,
@@ -272,32 +283,8 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
                                     ),
                                   )
                                 else
-                                  const Spacer(),
-                                const SizedBox(width: 12),
-                                if (_isListening)
                                   Expanded(
                                     flex: 2,
-                                    child: NeonButton(
-                                      onPressed: () => _triggerGeneration(context),
-                                      glowColor: themeColor,
-                                      gradientColors: [themeColor, themeColor.withBlue(210).withRed(40)],
-                                      borderRadius: 8.0,
-                                      child: FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Text("SYNTHESIZE", style: CyberTheme.headingStyle(fontSize: 11, color: Colors.white)),
-                                            const SizedBox(width: 4),
-                                            const Icon(Icons.bolt_rounded, color: Colors.white, size: 14),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  SizedBox(
-                                    width: 160,
                                     child: NeonButton(
                                       onPressed: () => _triggerGeneration(context),
                                       glowColor: themeColor,
@@ -371,15 +358,9 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        "PROMPT MATRIX INJECTOR",
-                                        style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
-                                      ),
-                                      Icon(Icons.psychology_rounded, color: CyberTheme.textMuted, size: 18),
-                                    ],
+                                  Text(
+                                    "PROMPT MATRIX INJECTOR",
+                                    style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
                                   ),
                                   const SizedBox(height: 12),
                                   Expanded(
@@ -398,49 +379,30 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
                               ),
                             ),
                           ),
-                          const SizedBox(height: 16),
-
-                          // Suggested Prompts
-                          Text(
-                            "TEMPLATE PILLS",
-                            style: CyberTheme.monospaceStyle(fontSize: 10, color: CyberTheme.textMuted),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _quickPrompts.map((p) {
-                              final isSelected = _promptController.text == p;
-                              return InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _promptController.text = p;
-                                  });
-                                },
-                                borderRadius: BorderRadius.circular(4),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? themeColor.withOpacity(0.15) : Colors.white.withOpacity(0.04),
-                                    border: Border.all(
-                                      color: isSelected ? themeColor : Colors.white10,
-                                      width: 1.0,
-                                    ),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    p,
-                                    style: CyberTheme.bodyStyle(
-                                      fontSize: 12,
-                                      color: isSelected ? Colors.white : CyberTheme.textMuted,
+                          // Live Voice Status indicator (desktop)
+                          if (_voiceStatusText.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: CyberTheme.cyberPink.withValues(alpha: 0.12),
+                                border: Border.all(color: CyberTheme.cyberPink.withValues(alpha: 0.4)),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.record_voice_over_rounded, color: CyberTheme.cyberPink, size: 16),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _voiceStatusText,
+                                      style: CyberTheme.monospaceStyle(fontSize: 9.5, color: CyberTheme.cyberPink).copyWith(fontWeight: FontWeight.bold),
                                     ),
                                   ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 24),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                          ],
 
                           // Controls row (Voice mic + Generate button)
                           Row(
@@ -449,24 +411,32 @@ class _PromptScreenState extends State<PromptScreen> with SingleTickerProviderSt
                               GestureDetector(
                                 onTap: _toggleVoiceListening,
                                 child: Container(
-                                  height: 50,
-                                  width: 50,
+                                  height: 52,
+                                  width: 52,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: _isListening ? CyberTheme.cyberPink : themeColor.withOpacity(0.3)),
-                                    color: (_isListening ? CyberTheme.cyberPink : themeColor).withOpacity(0.1),
+                                    border: Border.all(color: _isListening ? CyberTheme.cyberPink : themeColor.withValues(alpha: 0.4)),
+                                    color: (_isListening ? CyberTheme.cyberPink : themeColor).withValues(alpha: _isListening ? 0.25 : 0.1),
+                                    boxShadow: [
+                                      if (_isListening)
+                                        BoxShadow(
+                                          color: CyberTheme.cyberPink.withValues(alpha: 0.5),
+                                          blurRadius: 16,
+                                          spreadRadius: 3,
+                                        ),
+                                    ],
                                   ),
                                   child: Icon(
                                     _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
                                     color: _isScanningOrListeningColor(themeColor),
-                                    size: 24,
+                                    size: 26,
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 16),
                               if (_isListening)
                                 Expanded(
-                                  child: Container(
+                                  child: SizedBox(
                                     height: 50,
                                     child: AnimatedBuilder(
                                       animation: _waveController,

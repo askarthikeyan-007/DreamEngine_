@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:dream_engine_ai/core/state/engine_state.dart';
 import 'package:dream_engine_ai/core/theme/cyber_theme.dart';
 import 'package:dream_engine_ai/core/widgets/glass_container.dart';
@@ -18,6 +19,7 @@ class GamePricePredictorScreen extends StatefulWidget {
 class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _calendarFilter = "ALL";
+  String _storeFilter = "ALL";
   int? _expandedGameIndex;
   final TextEditingController _searchController = TextEditingController();
 
@@ -111,6 +113,18 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
       return "${state.selectedRegion.currencySymbol}${amount.toStringAsFixed(0)}";
     }
     return "${state.selectedRegion.currencySymbol}${amount.toStringAsFixed(2)}";
+  }
+
+  Future<void> _openStoreUrl(String urlString) async {
+    if (urlString.isEmpty) return;
+    try {
+      final uri = Uri.parse(urlString);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint("Failed to launch URL: $e");
+    }
   }
 
   Color _getThemeColor(EngineState state) {
@@ -250,69 +264,219 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
 
   // --- CALENDAR TAB BUILDER ---
   Widget _buildCalendarTab(EngineState state, Color themeColor, bool isMobile) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    const dayNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+    const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    final currentDayName = dayNames[now.weekday % 7];
+    final currentMonthName = monthNames[now.month - 1];
+
     final filteredEvents = state.calendarEvents.where((e) {
       if (_calendarFilter == "ALL") return true;
+      if (_calendarFilter == "THIS_WEEK") return e.isThisWeek;
       if (_calendarFilter == "RELEASES") return e.type == "release";
       if (_calendarFilter == "SALES") return e.type == "sale";
+      if (_calendarFilter == "WATCHLIST") return e.isStarred;
       return true;
     }).toList();
 
     // Sort events chronologically
     filteredEvents.sort((a, b) => a.date.compareTo(b.date));
 
+    final todayCount = state.calendarEvents.where((e) => e.isToday).length;
+    final thisWeekCount = state.calendarEvents.where((e) => e.isThisWeek).length;
+    final thisMonthCount = state.calendarEvents.where((e) => e.isThisMonth).length;
+    final watchlistCount = state.calendarEvents.where((e) => e.isStarred).length;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 96),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Filter badges
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: ["ALL", "RELEASES", "SALES"].map((filter) {
-                final isSelected = _calendarFilter == filter;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _calendarFilter = filter;
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(6),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          // 1. Live Day-by-Day Radar Header Banner
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  themeColor.withValues(alpha: 0.12),
+                  const Color(0xFF0C101A),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              border: Border.all(color: themeColor.withValues(alpha: 0.3)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
                       decoration: BoxDecoration(
-                        color: isSelected ? themeColor.withOpacity(0.18) : Colors.white.withOpacity(0.02),
-                        border: Border.all(
-                          color: isSelected ? themeColor : Colors.white10,
-                          width: 1.0,
-                        ),
-                        borderRadius: BorderRadius.circular(6),
+                        shape: BoxShape.circle,
+                        color: themeColor,
+                        boxShadow: [
+                          BoxShadow(
+                            color: themeColor.withValues(alpha: 0.8),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      "LIVE DAY-BY-DAY RADAR",
+                      style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.white12),
                       ),
                       child: Text(
-                        filter + (filter == "ALL" ? " EVENTS" : " ONLY"),
-                        style: CyberTheme.monospaceStyle(
-                          fontSize: 9,
-                          color: isSelected ? Colors.white : CyberTheme.textMuted,
+                        "TODAY: $currentDayName, $currentMonthName ${now.day.toString().padLeft(2, '0')}, ${now.year}",
+                        style: CyberTheme.monospaceStyle(fontSize: 9, color: themeColor),
+                      ),
+                    ),
+                    const Spacer(),
+                    // Sync Radar Button
+                    InkWell(
+                      onTap: state.isSyncingCalendar ? null : () => state.refreshDailyCalendarEvents(),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: themeColor.withValues(alpha: 0.15),
+                          border: Border.all(color: themeColor),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            state.isSyncingCalendar
+                                ? SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: themeColor),
+                                  )
+                                : Icon(Icons.sync_rounded, size: 13, color: themeColor),
+                            const SizedBox(width: 6),
+                            Text(
+                              state.isSyncingCalendar ? "SYNCING..." : "SYNC LIVE RADAR",
+                              style: CyberTheme.monospaceStyle(fontSize: 8.5, color: Colors.white),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
+                    const SizedBox(width: 8),
+                    // Add Custom Alert Button
+                    InkWell(
+                      onTap: () => _showAddEventDialog(context, state, themeColor),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          border: Border.all(color: Colors.white24),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.add_rounded, size: 14, color: Colors.white),
+                            const SizedBox(width: 4),
+                            Text(
+                              "+ TRACK GAME",
+                              style: CyberTheme.monospaceStyle(fontSize: 8.5, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Quick Telemetry Counters Grid
+                Row(
+                  children: [
+                    _buildKpiBadge(
+                      label: "ACTIVE TODAY",
+                      count: todayCount,
+                      color: const Color(0xFF00FF88),
+                      icon: Icons.bolt_rounded,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildKpiBadge(
+                      label: "THIS WEEK (7D)",
+                      count: thisWeekCount,
+                      color: themeColor,
+                      icon: Icons.calendar_view_week_rounded,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildKpiBadge(
+                      label: "THIS MONTH (30D)",
+                      count: thisMonthCount,
+                      color: const Color(0xFF00E5FF),
+                      icon: Icons.rocket_launch_rounded,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildKpiBadge(
+                      label: "MY WATCHLIST",
+                      count: watchlistCount,
+                      color: const Color(0xFFFFB300),
+                      icon: Icons.star_rounded,
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+
+          // Filter Badges Bar
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip("ALL", "ALL TELEMETRY (${state.calendarEvents.length})", themeColor),
+                _buildFilterChip("THIS_WEEK", "🔥 ACTIVE & THIS WEEK ($thisWeekCount)", const Color(0xFF00FF88)),
+                _buildFilterChip("RELEASES", "🎮 GAME RELEASES", themeColor),
+                _buildFilterChip("SALES", "🏷️ STORE SALES", const Color(0xFFFF1E27)),
+                _buildFilterChip("WATCHLIST", "⭐ MY WATCHLIST ($watchlistCount)", const Color(0xFFFFB300)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
 
           // Events Timeline list
           Expanded(
             child: filteredEvents.isEmpty
                 ? Center(
-                    child: Text(
-                      "NO TIMELINE VECTORS RECORDED.",
-                      style: CyberTheme.monospaceStyle(fontSize: 10, color: CyberTheme.textMuted),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.radar_rounded, size: 48, color: themeColor.withValues(alpha: 0.3)),
+                        const SizedBox(height: 12),
+                        Text(
+                          "NO TELEMETRY EVENTS IN CURRENT FILTER.",
+                          style: CyberTheme.monospaceStyle(fontSize: 11, color: CyberTheme.textMuted),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Tap 'SYNC LIVE RADAR' or '+ TRACK GAME' to schedule custom releases.",
+                          style: CyberTheme.bodyStyle(fontSize: 10, color: Colors.white38),
+                        ),
+                      ],
                     ),
                   )
                 : ListView.builder(
@@ -320,48 +484,76 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
                     itemBuilder: (context, index) {
                       final event = filteredEvents[index];
                       final isSale = event.type == "sale";
-                      final eventColor = isSale ? const Color(0xFFFF1E27) : const Color(0xFF00FF88);
+                      final eventColor = isSale ? const Color(0xFFFF334B) : const Color(0xFF00FF88);
 
                       final months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
                       final monthStr = months[event.date.month - 1];
                       final dayStr = event.date.day.toString().padLeft(2, '0');
+                      final dayOfWeek = event.dayOfWeekStr;
+
+                      Color badgeBgColor;
+                      Color badgeTextColor;
+                      if (event.isToday) {
+                        badgeBgColor = const Color(0xFF00FF88).withValues(alpha: 0.2);
+                        badgeTextColor = const Color(0xFF00FF88);
+                      } else if (event.isTomorrow) {
+                        badgeBgColor = Colors.amber.withValues(alpha: 0.2);
+                        badgeTextColor = Colors.amber;
+                      } else if (event.isThisWeek) {
+                        badgeBgColor = themeColor.withValues(alpha: 0.2);
+                        badgeTextColor = themeColor;
+                      } else {
+                        badgeBgColor = Colors.white.withValues(alpha: 0.05);
+                        badgeTextColor = CyberTheme.textMuted;
+                      }
 
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 16.0),
+                        padding: const EdgeInsets.only(bottom: 12.0),
                         child: GlassContainer(
-                          borderColor: themeColor.withOpacity(0.12),
-                          padding: const EdgeInsets.all(16),
+                          borderColor: event.isToday
+                              ? const Color(0xFF00FF88).withValues(alpha: 0.5)
+                              : (event.isStarred ? const Color(0xFFFFB300).withValues(alpha: 0.4) : themeColor.withValues(alpha: 0.12)),
+                          padding: const EdgeInsets.all(14),
+                          hasGlow: event.isToday,
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Big Date Card
+                              // Big Day & Date Card
                               Container(
-                                width: 68,
+                                width: 72,
                                 padding: const EdgeInsets.symmetric(vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.03),
-                                  border: Border.all(color: Colors.white10),
+                                  color: event.isToday
+                                      ? const Color(0xFF00FF88).withValues(alpha: 0.08)
+                                      : Colors.white.withValues(alpha: 0.03),
+                                  border: Border.all(
+                                    color: event.isToday ? const Color(0xFF00FF88).withValues(alpha: 0.4) : Colors.white12,
+                                  ),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      monthStr,
-                                      style: CyberTheme.monospaceStyle(fontSize: 10, color: themeColor),
+                                      dayOfWeek,
+                                      style: CyberTheme.monospaceStyle(
+                                        fontSize: 9,
+                                        color: event.isToday ? const Color(0xFF00FF88) : themeColor,
+                                      ).copyWith(fontWeight: FontWeight.bold),
                                     ),
+                                    const SizedBox(height: 2),
                                     Text(
                                       dayStr,
                                       style: CyberTheme.titleStyle(fontSize: 22, color: Colors.white).copyWith(shadows: []),
                                     ),
                                     Text(
-                                      event.date.year.toString(),
-                                      style: CyberTheme.monospaceStyle(fontSize: 7, color: CyberTheme.textMuted),
+                                      "$monthStr ${event.date.year}",
+                                      style: CyberTheme.monospaceStyle(fontSize: 7.5, color: CyberTheme.textMuted),
                                     ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 16),
+                              const SizedBox(width: 14),
 
                               // Info Column
                               Expanded(
@@ -369,38 +561,56 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
+                                        // Type Tag
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: eventColor.withOpacity(0.08),
+                                            color: eventColor.withValues(alpha: 0.12),
                                             borderRadius: BorderRadius.circular(4),
-                                            border: Border.all(color: eventColor.withOpacity(0.3)),
+                                            border: Border.all(color: eventColor.withValues(alpha: 0.4)),
                                           ),
                                           child: Text(
                                             event.type.toUpperCase(),
                                             style: CyberTheme.monospaceStyle(fontSize: 8, color: eventColor),
                                           ),
                                         ),
+                                        const SizedBox(width: 6),
+                                        // Live Countdown Badge
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: badgeBgColor,
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: badgeTextColor.withValues(alpha: 0.4)),
+                                          ),
+                                          child: Text(
+                                            event.countdownBadge,
+                                            style: CyberTheme.monospaceStyle(
+                                              fontSize: 7.5,
+                                              color: badgeTextColor,
+                                            ).copyWith(fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        const Spacer(),
                                         Text(
                                           "// ${event.platform}",
                                           style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      event.title.toUpperCase(),
-                                      style: CyberTheme.headingStyle(fontSize: 13, color: Colors.white),
-                                    ),
                                     const SizedBox(height: 6),
                                     Text(
+                                      event.title.toUpperCase(),
+                                      style: CyberTheme.headingStyle(fontSize: 12.5, color: Colors.white),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
                                       event.description,
-                                      style: CyberTheme.bodyStyle(fontSize: 11, color: CyberTheme.textMuted),
+                                      style: CyberTheme.bodyStyle(fontSize: 10.5, color: CyberTheme.textMuted),
                                     ),
                                     if (event.expectedPrice != null || event.expectedDiscount != null) ...[
-                                      const SizedBox(height: 10),
+                                      const SizedBox(height: 8),
                                       Row(
                                         children: [
                                           Icon(Icons.tag_rounded, size: 12, color: themeColor),
@@ -417,6 +627,34 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 8),
+
+                              // Action Buttons Column (Star & External Link)
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(
+                                      event.isStarred ? Icons.star_rounded : Icons.star_border_rounded,
+                                      color: event.isStarred ? const Color(0xFFFFB300) : Colors.white30,
+                                      size: 20,
+                                    ),
+                                    tooltip: event.isStarred ? "Remove from Watchlist" : "Add to Watchlist",
+                                    onPressed: () => state.toggleCalendarEventStar(event),
+                                  ),
+                                  if (event.storeUrl != null && event.storeUrl!.isNotEmpty)
+                                    IconButton(
+                                      icon: const Icon(Icons.open_in_new_rounded, color: Colors.white54, size: 16),
+                                      tooltip: "Open Store / Details",
+                                      onPressed: () async {
+                                        final uri = Uri.parse(event.storeUrl!);
+                                        if (await canLaunchUrl(uri)) {
+                                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                        }
+                                      },
+                                    ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -429,12 +667,394 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
     );
   }
 
-  Widget _buildPriceTrackerTab(EngineState state, Color themeColor, bool isMobile) {
+  Widget _buildFilterChip(String filterKey, String label, Color chipColor) {
+    final isSelected = _calendarFilter == filterKey;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 96),
+      padding: const EdgeInsets.only(right: 8.0),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _calendarFilter = filterKey;
+          });
+        },
+        borderRadius: BorderRadius.circular(6),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: isSelected ? chipColor.withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.02),
+            border: Border.all(
+              color: isSelected ? chipColor : Colors.white10,
+              width: 1.0,
+            ),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            label,
+            style: CyberTheme.monospaceStyle(
+              fontSize: 8.5,
+              color: isSelected ? Colors.white : CyberTheme.textMuted,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKpiBadge({
+    required String label,
+    required int count,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: CyberTheme.monospaceStyle(fontSize: 7, color: CyberTheme.textMuted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    "$count",
+                    style: CyberTheme.headingStyle(fontSize: 14, color: color),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddEventDialog(BuildContext context, EngineState state, Color themeColor) {
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final platformCtrl = TextEditingController(text: "Steam / PC");
+    final priceCtrl = TextEditingController(text: "59.99");
+    String eventType = "release";
+    DateTime selectedDate = DateTime.now().add(const Duration(days: 7));
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF090D18),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: themeColor.withValues(alpha: 0.4)),
+            ),
+            title: Row(
+              children: [
+                Icon(Icons.add_alert_rounded, color: themeColor, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  "TRACK UPCOMING RELEASE / SALE",
+                  style: CyberTheme.headingStyle(fontSize: 12, color: Colors.white),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("EVENT TITLE", style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor)),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: titleCtrl,
+                      style: CyberTheme.bodyStyle(fontSize: 12, color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: "e.g. Witcher 4: Polaris / Summer Fest",
+                        hintStyle: CyberTheme.bodyStyle(fontSize: 11, color: Colors.white30),
+                        filled: true,
+                        fillColor: Colors.black26,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("TYPE", style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor)),
+                              const SizedBox(height: 4),
+                              DropdownButtonFormField<String>(
+                                value: eventType,
+                                dropdownColor: const Color(0xFF070B14),
+                                style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: Colors.black26,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                items: const [
+                                  DropdownMenuItem(value: "release", child: Text("🎮 GAME RELEASE")),
+                                  DropdownMenuItem(value: "sale", child: Text("🏷️ STORE SALE")),
+                                ],
+                                onChanged: (val) => setDlgState(() => eventType = val ?? "release"),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("DATE", style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor)),
+                              const SizedBox(height: 4),
+                              InkWell(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: selectedDate,
+                                    firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                                  );
+                                  if (picked != null) {
+                                    setDlgState(() => selectedDate = picked);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black26,
+                                    border: Border.all(color: Colors.white24),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}",
+                                        style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white),
+                                      ),
+                                      const Icon(Icons.calendar_today_rounded, size: 14, color: Colors.white70),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text("PLATFORM & EXPECTED MSRP / DISCOUNT", style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: platformCtrl,
+                            style: CyberTheme.bodyStyle(fontSize: 11, color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: "Platform",
+                              filled: true,
+                              fillColor: Colors.black26,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 1,
+                          child: TextField(
+                            controller: priceCtrl,
+                            keyboardType: TextInputType.number,
+                            style: CyberTheme.bodyStyle(fontSize: 11, color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: eventType == "release" ? "Price (\$)" : "Disc %",
+                              filled: true,
+                              fillColor: Colors.black26,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text("DESCRIPTION", style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor)),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: descCtrl,
+                      maxLines: 2,
+                      style: CyberTheme.bodyStyle(fontSize: 11, color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: "Short notes about this release or sale event...",
+                        hintStyle: CyberTheme.bodyStyle(fontSize: 10, color: Colors.white30),
+                        filled: true,
+                        fillColor: Colors.black26,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text("CANCEL", style: CyberTheme.monospaceStyle(fontSize: 10, color: CyberTheme.textMuted)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: themeColor,
+                  foregroundColor: Colors.black,
+                ),
+                onPressed: () {
+                  final title = titleCtrl.text.trim();
+                  if (title.isEmpty) return;
+                  final priceVal = double.tryParse(priceCtrl.text.trim());
+
+                  final newEv = CalendarEvent(
+                    title: title,
+                    date: selectedDate,
+                    type: eventType,
+                    description: descCtrl.text.trim().isEmpty
+                        ? (eventType == "release" ? "Upcoming game launch." : "Upcoming store promotional event.")
+                        : descCtrl.text.trim(),
+                    platform: platformCtrl.text.trim().isEmpty ? "PC" : platformCtrl.text.trim(),
+                    expectedPrice: eventType == "release" ? priceVal : null,
+                    expectedDiscount: eventType == "sale" ? priceVal : null,
+                    storeUrl: "https://store.steampowered.com/search/?term=${Uri.encodeComponent(title)}",
+                    isStarred: true,
+                  );
+
+                  state.addCustomCalendarEvent(newEv);
+                  Navigator.pop(ctx);
+                },
+                child: Text("ADD TO RADAR", style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.black).copyWith(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPriceTrackerTab(EngineState state, Color themeColor, bool isMobile) {
+    // Filter games based on selected filter
+    final filteredGames = state.predictorGames.where((g) {
+      if (_storeFilter == "ON SALE") return g.hasAnyActiveDiscount;
+      if (_storeFilter == "STEAM") return g.steamOffer != null;
+      if (_storeFilter == "PLAYSTATION") return g.playstationOffer != null;
+      return true;
+    }).toList();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 96),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Cyberpunk Search bar for live CheapShark predictions
+          // Store Connection Status Banner
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.4),
+              border: Border.all(color: Colors.white10),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                // Steam Status Pill
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF171D25),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF66C0F4).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF66C0F4),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "STEAM STORE API",
+                        style: CyberTheme.monospaceStyle(fontSize: 8, color: const Color(0xFF66C0F4)).copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // PlayStation Status Pill
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF003087).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF0070D1).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF0070D1),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "PLAYSTATION STORE",
+                        style: CyberTheme.monospaceStyle(fontSize: 8, color: const Color(0xFF0070D1)).copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+
+                // Regional Market
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.currency_exchange_rounded, size: 12, color: Colors.white54),
+                    const SizedBox(width: 4),
+                    Text(
+                      "${state.selectedRegion.currency} (${state.selectedRegion.currencySymbol})",
+                      style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Cyberpunk Search bar for Steam & PlayStation Store
           Row(
             children: [
               Expanded(
@@ -442,9 +1062,18 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
                   controller: _searchController,
                   style: CyberTheme.bodyStyle(fontSize: 12, color: Colors.white),
                   decoration: InputDecoration(
-                    hintText: "ENTER GAME TITLE FOR LIVE FORECAST...",
+                    hintText: "SEARCH STEAM & PLAYSTATION STORE (e.g. Cyberpunk, Elden Ring, GTA V)...",
                     hintStyle: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white30),
                     prefixIcon: Icon(Icons.search, color: themeColor, size: 16),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 14, color: Colors.white38),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {});
+                            },
+                          )
+                        : null,
                     enabledBorder: OutlineInputBorder(
                       borderSide: BorderSide(color: themeColor.withOpacity(0.3)),
                       borderRadius: BorderRadius.circular(8),
@@ -453,7 +1082,7 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
                       borderSide: BorderSide(color: themeColor),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                   ),
                   onSubmitted: (val) {
                     if (val.trim().isNotEmpty) {
@@ -465,10 +1094,10 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
               const SizedBox(width: 10),
               state.isSearchingLiveGame
                   ? SizedBox(
-                      width: 40,
-                      height: 40,
+                      width: 42,
+                      height: 42,
                       child: Padding(
-                        padding: const EdgeInsets.all(8.0),
+                        padding: const EdgeInsets.all(10.0),
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation<Color>(themeColor),
@@ -476,8 +1105,8 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
                       ),
                     )
                   : NeonButton(
-                      width: 80,
-                      height: 40,
+                      width: 90,
+                      height: 42,
                       onPressed: () {
                         if (_searchController.text.trim().isNotEmpty) {
                           state.predictLiveGamePrice(_searchController.text.trim());
@@ -485,251 +1114,592 @@ class _GamePricePredictorScreenState extends State<GamePricePredictorScreen> wit
                       },
                       glowColor: themeColor,
                       gradientColors: [themeColor, themeColor.withOpacity(0.6)],
-                      child: Text(
-                        "SEARCH",
-                        style: CyberTheme.monospaceStyle(fontSize: 9, color: Colors.white),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.bolt_rounded, color: Colors.white, size: 13),
+                          const SizedBox(width: 4),
+                          Text(
+                            "SEARCH",
+                            style: CyberTheme.monospaceStyle(fontSize: 8.5, color: Colors.white).copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
                     ),
             ],
           ),
           if (state.liveGameSearchError.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                "WARNING: ${state.liveGameSearchError}",
+                "NOTICE: ${state.liveGameSearchError}",
                 style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.neonBlue),
               ),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+
+          // Platform & Deal Filter Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildStoreFilterChip("ALL", "ALL PLATFORMS (${state.predictorGames.length})", themeColor),
+                const SizedBox(width: 8),
+                _buildStoreFilterChip("ON SALE", "🔥 ON SALE NOW (${state.predictorGames.where((g) => g.hasAnyActiveDiscount).length})", const Color(0xFF00FF88)),
+                const SizedBox(width: 8),
+                _buildStoreFilterChip("STEAM", "STEAM STORE", const Color(0xFF66C0F4)),
+                const SizedBox(width: 8),
+                _buildStoreFilterChip("PLAYSTATION", "PLAYSTATION STORE", const Color(0xFF0070D1)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
           // Expanded price forecast list
           Expanded(
-            child: ListView.builder(
-              itemCount: state.predictorGames.length,
-              itemBuilder: (context, index) {
-          final game = state.predictorGames[index];
-          final isExpanded = _expandedGameIndex == index;
-          final waitWarning = game.recommendation.contains("WAIT");
-          final recColor = waitWarning ? Colors.orangeAccent : const Color(0xFF00FF88);
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: GlassContainer(
-              borderColor: isExpanded ? themeColor.withOpacity(0.4) : themeColor.withOpacity(0.12),
-              hasGlow: isExpanded,
-              padding: const EdgeInsets.all(0),
-              child: Column(
-                children: [
-                  // Main row
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.network(
-                        game.imageUrl,
-                        width: 70,
-                        height: 50,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          width: 70,
-                          height: 50,
-                          color: Colors.white.withOpacity(0.05),
-                          child: const Icon(Icons.videogame_asset, size: 20, color: Colors.white30),
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      game.title.toUpperCase(),
-                      style: CyberTheme.headingStyle(fontSize: 13, color: Colors.white),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: game.store == "Steam" ? Colors.blue.withOpacity(0.1) : Colors.amber.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: game.store == "Steam" ? Colors.blueAccent : Colors.amberAccent,
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Text(
-                              game.store.toUpperCase(),
-                              style: CyberTheme.monospaceStyle(
-                                fontSize: 7,
-                                color: game.store == "Steam" ? Colors.blueAccent : Colors.amberAccent,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            "MSRP: ${state.formatRegionalPrice(game.basePrice)}",
-                            style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
-                          ),
-                        ],
-                      ),
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
+            child: filteredGames.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        const Icon(Icons.search_off_rounded, size: 36, color: Colors.white24),
+                        const SizedBox(height: 8),
                         Text(
-                          state.formatRegionalPrice(game.currentPrice),
-                          style: CyberTheme.titleStyle(fontSize: 14, color: Colors.white).copyWith(shadows: []),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          isExpanded ? "COLLAPSE" : "FORECAST",
-                          style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
+                          "NO GAMES MATCHING THIS FILTER",
+                          style: CyberTheme.monospaceStyle(fontSize: 10, color: Colors.white54),
                         ),
                       ],
                     ),
-                    onTap: () {
-                      setState(() {
-                        _expandedGameIndex = isExpanded ? null : index;
-                      });
-                    },
-                  ),
+                  )
+                : ListView.builder(
+                    itemCount: filteredGames.length,
+                    itemBuilder: (context, index) {
+                      final game = filteredGames[index];
+                      final isExpanded = _expandedGameIndex == index;
+                      final waitWarning = game.recommendation.contains("WAIT");
+                      final recColor = waitWarning ? Colors.orangeAccent : const Color(0xFF00FF88);
 
-                  // Expandable panel
-                  if (isExpanded) ...[
-                    const Divider(color: Colors.white10, height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Sparkline history chart
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                "12-MONTH HISTORICAL PRICE WAVEFORM",
-                                style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
-                              ),
-                              Text(
-                                "HISTORIC LOW: ${state.formatRegionalPrice(game.historicalLow)}",
-                                style: CyberTheme.monospaceStyle(fontSize: 8, color: themeColor),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Container(
-                            height: 60,
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.4),
-                              border: Border.all(color: Colors.white.withOpacity(0.05)),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Center(
-                              child: GameSparkline(
-                                data: game.priceHistory.map((p) => state.convertPrice(p)).toList(),
-                                isPositive: game.currentPrice <= game.priceHistory.first,
-                                width: isMobile ? 240 : 400,
-                                height: 44,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
+                      final steamOffer = game.steamOffer;
+                      final psOffer = game.playstationOffer;
 
-                          // AI price prediction details grid
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 14.0),
+                        child: GlassContainer(
+                          borderColor: isExpanded ? themeColor.withOpacity(0.4) : (game.hasAnyActiveDiscount ? const Color(0xFF00FF88).withOpacity(0.2) : themeColor.withOpacity(0.12)),
+                          hasGlow: isExpanded,
+                          padding: const EdgeInsets.all(0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Expanded(
-                                child: _buildPredictionMetricsCard(
-                                  "NEXT DISCOUNT ESTIMATE",
-                                  game.nextPredictedSale.toUpperCase(),
-                                  Icons.calendar_today_rounded,
-                                  themeColor,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildPredictionMetricsCard(
-                                  "FORECASTED DISCOUNT PRICE",
-                                  "${state.formatRegionalPrice(game.basePrice * (1 - (game.predictedDiscountPercent / 100)))} (-${game.predictedDiscountPercent.toInt()}%)",
-                                  Icons.trending_down_rounded,
-                                  themeColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _buildPredictionMetricsCard(
-                                  "PREDICTION CONFIDENCE",
-                                  game.confidence,
-                                  Icons.online_prediction_rounded,
-                                  themeColor,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildPredictionMetricsCard(
-                                  "LAST SALE REGISTERED",
-                                  game.lastDiscountDate.toUpperCase(),
-                                  Icons.history_rounded,
-                                  themeColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Advice block
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: recColor.withOpacity(0.05),
-                              border: Border.all(color: recColor.withOpacity(0.2)),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  waitWarning ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded,
-                                  color: recColor,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                              // Active Discount Ribbon if game is on sale
+                              if (game.hasAnyActiveDiscount)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        const Color(0xFF00FF88).withOpacity(0.2),
+                                        Colors.transparent,
+                                      ],
+                                    ),
+                                    border: Border(
+                                      bottom: BorderSide(color: const Color(0xFF00FF88).withOpacity(0.2), width: 0.5),
+                                    ),
+                                  ),
+                                  child: Row(
                                     children: [
+                                      const Icon(Icons.local_fire_department_rounded, color: Color(0xFF00FF88), size: 12),
+                                      const SizedBox(width: 6),
                                       Text(
-                                        waitWarning ? "SYSTEM RECOMMENDATION: WAITING PROTOCOL" : "SYSTEM RECOMMENDATION: ACQUIRE LICENSE",
-                                        style: CyberTheme.monospaceStyle(fontSize: 9, color: recColor).copyWith(fontWeight: FontWeight.bold),
+                                        game.activeDiscountsSummary ?? "LIVE DISCOUNT ACTIVE ACROSS STORES",
+                                        style: CyberTheme.monospaceStyle(fontSize: 7.5, color: const Color(0xFF00FF88)).copyWith(fontWeight: FontWeight.bold),
                                       ),
-                                      const SizedBox(height: 4),
+                                    ],
+                                  ),
+                                ),
+
+                              // Main Game Header Row
+                              InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _expandedGameIndex = isExpanded ? null : index;
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      // Game Banner Art
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Image.network(
+                                          game.imageUrl,
+                                          width: isMobile ? 65 : 85,
+                                          height: isMobile ? 48 : 55,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) => Container(
+                                            width: isMobile ? 65 : 85,
+                                            height: isMobile ? 48 : 55,
+                                            color: Colors.white.withOpacity(0.05),
+                                            child: const Icon(Icons.videogame_asset, size: 20, color: Colors.white30),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+
+                                      // Title & Store Comparison Pills
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              game.title.toUpperCase(),
+                                              style: CyberTheme.headingStyle(fontSize: isMobile ? 11.5 : 13, color: Colors.white),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 6),
+                                            // Store Price Badges
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 4,
+                                              children: [
+                                                // Steam Badge
+                                                if (steamOffer != null)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF171D25),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                      border: Border.all(
+                                                        color: steamOffer.hasDiscount ? const Color(0xFF00FF88) : const Color(0xFF66C0F4).withOpacity(0.4),
+                                                        width: 0.5,
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          "STEAM: ",
+                                                          style: CyberTheme.monospaceStyle(fontSize: 7.5, color: const Color(0xFF66C0F4)),
+                                                        ),
+                                                        Text(
+                                                          state.formatRegionalPrice(steamOffer.currentPrice),
+                                                          style: CyberTheme.monospaceStyle(
+                                                            fontSize: 7.5,
+                                                            color: steamOffer.hasDiscount ? const Color(0xFF00FF88) : Colors.white,
+                                                          ).copyWith(fontWeight: FontWeight.bold),
+                                                        ),
+                                                        if (steamOffer.hasDiscount) ...[
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            "-${steamOffer.discountPercent}%",
+                                                            style: CyberTheme.monospaceStyle(fontSize: 7, color: const Color(0xFF00FF88)).copyWith(fontWeight: FontWeight.bold),
+                                                          ),
+                                                        ],
+                                                      ],
+                                                    ),
+                                                  ),
+
+                                                // PlayStation Store Badge
+                                                if (psOffer != null)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF003087).withOpacity(0.2),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                      border: Border.all(
+                                                        color: psOffer.hasDiscount ? const Color(0xFF00FF88) : const Color(0xFF0070D1).withOpacity(0.4),
+                                                        width: 0.5,
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          "PS STORE: ",
+                                                          style: CyberTheme.monospaceStyle(fontSize: 7.5, color: const Color(0xFF0070D1)),
+                                                        ),
+                                                        Text(
+                                                          state.formatRegionalPrice(psOffer.currentPrice),
+                                                          style: CyberTheme.monospaceStyle(
+                                                            fontSize: 7.5,
+                                                            color: psOffer.hasDiscount ? const Color(0xFF00FF88) : Colors.white,
+                                                          ).copyWith(fontWeight: FontWeight.bold),
+                                                        ),
+                                                        if (psOffer.hasDiscount) ...[
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            "-${psOffer.discountPercent}%",
+                                                            style: CyberTheme.monospaceStyle(fontSize: 7, color: const Color(0xFF00FF88)).copyWith(fontWeight: FontWeight.bold),
+                                                          ),
+                                                        ],
+                                                      ],
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+
+                                      // Best Price display & Expand toggle
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            state.formatRegionalPrice(game.currentPrice),
+                                            style: CyberTheme.titleStyle(fontSize: isMobile ? 12 : 14, color: Colors.white).copyWith(shadows: []),
+                                          ),
+                                          if (game.basePrice > game.currentPrice)
+                                            Text(
+                                              state.formatRegionalPrice(game.basePrice),
+                                              style: CyberTheme.monospaceStyle(
+                                                fontSize: 8,
+                                                color: Colors.white38,
+                                              ).copyWith(decoration: TextDecoration.lineThrough),
+                                            ),
+                                          const SizedBox(height: 2),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                isExpanded ? "COLLAPSE" : "STORE MATRIX",
+                                                style: CyberTheme.monospaceStyle(fontSize: 7.5, color: themeColor),
+                                              ),
+                                              Icon(
+                                                isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                                                color: themeColor,
+                                                size: 14,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              // Expandable Store Pricing & Discount Matrix Panel
+                              if (isExpanded) ...[
+                                const Divider(color: Colors.white10, height: 1),
+                                Padding(
+                                  padding: const EdgeInsets.all(14.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Matrix Section Header
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            "STEAM & PLAYSTATION STORE REAL-TIME COMPARISON",
+                                            style: CyberTheme.monospaceStyle(fontSize: 8.5, color: themeColor).copyWith(fontWeight: FontWeight.bold),
+                                          ),
+                                          Text(
+                                            "ALL-TIME LOW: ${state.formatRegionalPrice(game.historicalLow)}",
+                                            style: CyberTheme.monospaceStyle(fontSize: 8, color: const Color(0xFF00FF88)),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+
+                                      // Store Cards Row (Steam vs PlayStation Store)
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // Steam Store Card
+                                          if (steamOffer != null)
+                                            Expanded(
+                                              child: _buildStoreOfferDetailCard(
+                                                offer: steamOffer,
+                                                state: state,
+                                                accentColor: const Color(0xFF66C0F4),
+                                                storeIcon: Icons.computer_rounded,
+                                                isMobile: isMobile,
+                                              ),
+                                            ),
+                                          const SizedBox(width: 10),
+
+                                          // PlayStation Store Card
+                                          if (psOffer != null)
+                                            Expanded(
+                                              child: _buildStoreOfferDetailCard(
+                                                offer: psOffer,
+                                                state: state,
+                                                accentColor: const Color(0xFF0070D1),
+                                                storeIcon: Icons.gamepad_rounded,
+                                                isMobile: isMobile,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 14),
+
+                                      // 12-Month Waveform
                                       Text(
-                                        _formatRecommendation(game.recommendation, state),
-                                        style: CyberTheme.bodyStyle(fontSize: 11, color: Colors.white70),
+                                        "12-MONTH HISTORICAL PRICE WAVEFORM",
+                                        style: CyberTheme.monospaceStyle(fontSize: 8, color: CyberTheme.textMuted),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        height: 55,
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.4),
+                                          border: Border.all(color: Colors.white.withOpacity(0.05)),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Center(
+                                          child: GameSparkline(
+                                            data: game.priceHistory.map((p) => state.convertPrice(p)).toList(),
+                                            isPositive: game.currentPrice <= game.priceHistory.first,
+                                            width: isMobile ? 240 : 450,
+                                            height: 40,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 14),
+
+                                      // AI Price Prediction Details Grid
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: _buildPredictionMetricsCard(
+                                              "NEXT DISCOUNT HORIZON",
+                                              game.nextPredictedSale.toUpperCase(),
+                                              Icons.calendar_today_rounded,
+                                              themeColor,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: _buildPredictionMetricsCard(
+                                              "FORECASTED SALE PRICE",
+                                              "${state.formatRegionalPrice(game.basePrice * (1 - (game.predictedDiscountPercent / 100)))} (-${game.predictedDiscountPercent.toInt()}%)",
+                                              Icons.trending_down_rounded,
+                                              const Color(0xFF00FF88),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: _buildPredictionMetricsCard(
+                                              "PREDICTION CONFIDENCE",
+                                              game.confidence,
+                                              Icons.online_prediction_rounded,
+                                              themeColor,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: _buildPredictionMetricsCard(
+                                              "LAST SALE REGISTERED",
+                                              game.lastDiscountDate.toUpperCase(),
+                                              Icons.history_rounded,
+                                              themeColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 14),
+
+                                      // AI Recommendation Advice Block
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: recColor.withOpacity(0.06),
+                                          border: Border.all(color: recColor.withOpacity(0.25)),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Icon(
+                                              waitWarning ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded,
+                                              color: recColor,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    waitWarning ? "SYSTEM RECOMMENDATION: WAITING PROTOCOL" : "SYSTEM RECOMMENDATION: ACQUIRE LICENSE NOW",
+                                                    style: CyberTheme.monospaceStyle(fontSize: 8.5, color: recColor).copyWith(fontWeight: FontWeight.bold),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    _formatRecommendation(game.recommendation, state),
+                                                    style: CyberTheme.bodyStyle(fontSize: 11, color: Colors.white70),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
                               ],
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStoreFilterChip(String key, String label, Color color) {
+    final isSel = _storeFilter == key;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _storeFilter = key;
+        });
+      },
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSel ? color.withOpacity(0.18) : Colors.white.withOpacity(0.02),
+          border: Border.all(
+            color: isSel ? color : Colors.white10,
+            width: 1.0,
+          ),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label.toUpperCase(),
+          style: CyberTheme.monospaceStyle(
+            fontSize: 8,
+            color: isSel ? Colors.white : CyberTheme.textMuted,
+          ).copyWith(fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoreOfferDetailCard({
+    required StoreOffer offer,
+    required EngineState state,
+    required Color accentColor,
+    required IconData storeIcon,
+    required bool isMobile,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: accentColor.withOpacity(0.05),
+        border: Border.all(color: accentColor.withOpacity(0.25)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Store Header
+          Row(
+            children: [
+              Icon(storeIcon, size: 14, color: accentColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  offer.storeName.toUpperCase(),
+                  style: CyberTheme.headingStyle(fontSize: 9.5, color: Colors.white),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (offer.hasDiscount)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00FF88).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5), width: 0.5),
+                  ),
+                  child: Text(
+                    "-${offer.discountPercent}%",
+                    style: CyberTheme.monospaceStyle(fontSize: 7.5, color: const Color(0xFF00FF88)).copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            offer.platform,
+            style: CyberTheme.monospaceStyle(fontSize: 7, color: CyberTheme.textMuted),
+          ),
+          const SizedBox(height: 8),
+
+          // Price row
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                state.formatRegionalPrice(offer.currentPrice),
+                style: CyberTheme.titleStyle(fontSize: 13, color: Colors.white).copyWith(shadows: []),
+              ),
+              const SizedBox(width: 6),
+              if (offer.hasDiscount)
+                Text(
+                  state.formatRegionalPrice(offer.regularPrice),
+                  style: CyberTheme.monospaceStyle(fontSize: 8, color: Colors.white38).copyWith(decoration: TextDecoration.lineThrough),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+
+          // Deal Label
+          Text(
+            offer.dealLabel,
+            style: CyberTheme.monospaceStyle(fontSize: 7.5, color: offer.hasDiscount ? const Color(0xFF00FF88) : Colors.white54),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 8),
+
+          // Direct Store Link Button
+          InkWell(
+            onTap: () => _openStoreUrl(offer.storeUrl),
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: accentColor.withOpacity(0.4), width: 0.5),
+              ),
+              alignment: Alignment.center,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "VIEW IN STORE",
+                    style: CyberTheme.monospaceStyle(fontSize: 7.5, color: Colors.white).copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.open_in_new_rounded, size: 10, color: Colors.white),
                 ],
               ),
-            ),
-          );
-              },
             ),
           ),
         ],

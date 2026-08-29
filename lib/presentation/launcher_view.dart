@@ -81,7 +81,8 @@ class LauncherView extends StatelessWidget {
         // Determine target theme glow color
         Color glowColor = CyberTheme.neonBlue;
 
-        final showNavbar = index >= 3;
+        // Hide floating navigation bar on DevChat (14) and UserProfile (15) to avoid blocking input controls
+        final showNavbar = index >= 3 && index != 14 && index != 15;
         final isLight = CyberTheme.isLight;
         final bgColor = isLight ? const Color(0xFFF1F5F9) : const Color(0xFF020204);
 
@@ -165,12 +166,6 @@ class LauncherView extends StatelessWidget {
                         ),
                       ),
                     ),
-                  // Small system E2E report generator button in top corner
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: const E2EReportTrigger(),
-                  ),
                 ],
               ),
             ),

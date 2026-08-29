@@ -910,9 +910,21 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> with SingleTicker
                                             glowColor: const Color(0xFFFF1E27),
                                             gradientColors: [const Color(0xFFFF1E27), const Color(0xFFFF1E27).withOpacity(0.5)],
                                             borderRadius: 4,
-                                            width: 76,
-                                            height: 30,
-                                            child: Text("CLAIM DEAL", style: CyberTheme.headingStyle(fontSize: 8, color: Colors.white)),
+                                            width: 92,
+                                            height: 32,
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            child: Center(
+                                              child: FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                child: Text(
+                                                  "CLAIM DEAL",
+                                                  style: CyberTheme.headingStyle(fontSize: 10, color: Colors.white).copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ],
                                       ),

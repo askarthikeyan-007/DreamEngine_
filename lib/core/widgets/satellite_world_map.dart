@@ -172,14 +172,16 @@ class _SatelliteWorldMapState extends State<SatelliteWorldMap> with TickerProvid
     List<String> subdomains = const [];
 
     if (_mapStyle == "Roadmap") {
-      // CartoDB Positron - clean light white map theme (Apple Maps style)
-      urlTemplate = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
-      subdomains = const ['a', 'b', 'c', 'd'];
+      // OpenStreetMap - 100% free, high-detail roadmap tiles with no API key or watermark
+      urlTemplate = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
     } else if (_mapStyle == "Satellite") {
-      // ESRI World Imagery - clean natural satellite view
+      // ESRI World Imagery - clean natural satellite view (no API key required)
       urlTemplate = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+    } else if (_mapStyle == "Dark") {
+      // ESRI World Dark Gray Canvas - cyber dark mode map (no API key required)
+      urlTemplate = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
     } else { // Terrain
-      // ESRI World Topo Map - clean light topographic terrain mapping
+      // ESRI World Topo Map - clean light topographic terrain mapping (no API key required)
       urlTemplate = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}';
     }
 
@@ -254,7 +256,7 @@ class _SatelliteWorldMapState extends State<SatelliteWorldMap> with TickerProvid
               top: 10,
               left: 10,
               child: Row(
-                children: ["Roadmap", "Satellite", "Terrain"].map((style) {
+                children: ["Roadmap", "Satellite", "Terrain", "Dark"].map((style) {
                   final isSelected = _mapStyle == style;
                   return Padding(
                     padding: const EdgeInsets.only(right: 6.0),

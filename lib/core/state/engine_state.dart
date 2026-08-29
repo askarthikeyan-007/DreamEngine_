@@ -4,8 +4,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:dream_engine_ai/core/services/sqlite_service.dart';
+import 'package:dream_engine_ai/core/models/bio_avatar.dart';
 import 'package:dream_engine_ai/game_engine/physics_engine/vehicle_physics.dart';
 import 'package:dream_engine_ai/core/services/hardware_service.dart';
+import 'package:dream_engine_ai/core/models/sound_theme.dart';
+import 'package:dream_engine_ai/core/services/audio_synth_helper.dart';
 
 enum AppTheme { cyberNeon, ironMan, nvidiaGreen, appleVision }
 
@@ -61,6 +64,8 @@ class CalendarEvent {
   final String platform;
   final double? expectedPrice;
   final double? expectedDiscount;
+  final String? storeUrl;
+  bool isStarred;
 
   CalendarEvent({
     required this.title,
@@ -70,7 +75,62 @@ class CalendarEvent {
     required this.platform,
     this.expectedPrice,
     this.expectedDiscount,
+    this.storeUrl,
+    this.isStarred = false,
   });
+
+  int get daysUntil {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    return target.difference(today).inDays;
+  }
+
+  bool get isToday => daysUntil == 0;
+  bool get isTomorrow => daysUntil == 1;
+  bool get isThisWeek => daysUntil >= 0 && daysUntil <= 7;
+  bool get isThisMonth => daysUntil > 7 && daysUntil <= 30;
+  bool get isFuture => daysUntil > 30;
+  bool get isPast => daysUntil < 0;
+
+  String get countdownBadge {
+    if (isToday) return "⚡ LIVE TODAY";
+    if (isTomorrow) return "⏳ TOMORROW";
+    if (daysUntil > 1 && daysUntil <= 7) return "📅 IN $daysUntil DAYS";
+    if (daysUntil > 7 && daysUntil <= 30) return "🚀 IN $daysUntil DAYS";
+    if (daysUntil > 30) return "🌌 IN ${(daysUntil / 30).ceil()} MO ($daysUntil d)";
+    return "ARCHIVED";
+  }
+
+  String get dayOfWeekStr {
+    const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+    return days[(date.weekday - 1) % 7];
+  }
+}
+
+class StoreOffer {
+  final String storeName; // 'Steam', 'PlayStation Store', 'Epic Games'
+  final double currentPrice;
+  final double regularPrice;
+  final int discountPercent;
+  final String platform; // 'PC / Steam Deck', 'PS5 | PS4', 'PC'
+  final String storeUrl;
+  final bool isLiveDeal;
+  final String dealLabel;
+
+  StoreOffer({
+    required this.storeName,
+    required this.currentPrice,
+    required this.regularPrice,
+    required this.discountPercent,
+    required this.platform,
+    required this.storeUrl,
+    this.isLiveDeal = false,
+    this.dealLabel = "Standard Price",
+  });
+
+  bool get hasDiscount => discountPercent > 0;
+  double get savingsAmount => (regularPrice - currentPrice).clamp(0.0, double.infinity);
 }
 
 class PredictorGame {
@@ -86,6 +146,8 @@ class PredictorGame {
   final String confidence;
   final String recommendation;
   final List<double> priceHistory;
+  final List<StoreOffer> storeOffers;
+  final String? activeDiscountsSummary;
 
   PredictorGame({
     required this.title,
@@ -100,7 +162,48 @@ class PredictorGame {
     required this.confidence,
     required this.recommendation,
     required this.priceHistory,
+    this.storeOffers = const [],
+    this.activeDiscountsSummary,
   });
+
+  StoreOffer? get steamOffer {
+    try {
+      return storeOffers.firstWhere((o) => o.storeName.toLowerCase().contains("steam"));
+    } catch (_) {
+      return StoreOffer(
+        storeName: "Steam",
+        currentPrice: currentPrice,
+        regularPrice: basePrice,
+        discountPercent: basePrice > currentPrice ? (((basePrice - currentPrice) / basePrice) * 100).round() : 0,
+        platform: "PC / Steam Deck",
+        storeUrl: "https://store.steampowered.com/search/?term=${Uri.encodeComponent(title)}",
+        isLiveDeal: basePrice > currentPrice,
+        dealLabel: basePrice > currentPrice ? "Steam Promotion" : "Steam Standard",
+      );
+    }
+  }
+
+  StoreOffer? get playstationOffer {
+    try {
+      return storeOffers.firstWhere((o) => o.storeName.toLowerCase().contains("playstation") || o.storeName.toLowerCase().contains("ps"));
+    } catch (_) {
+      final double psMSRP = basePrice >= 59.99 ? 69.99 : basePrice;
+      final int psDisc = basePrice > currentPrice ? (((basePrice - currentPrice) / basePrice) * 100).round() : 0;
+      final double psCurrent = psDisc > 0 ? (psMSRP * (1 - psDisc / 100)) : psMSRP;
+      return StoreOffer(
+        storeName: "PlayStation Store",
+        currentPrice: psCurrent,
+        regularPrice: psMSRP,
+        discountPercent: psDisc,
+        platform: "PS5 | PS4",
+        storeUrl: "https://store.playstation.com/en-us/search/${Uri.encodeComponent(title)}",
+        isLiveDeal: psDisc > 0,
+        dealLabel: psDisc > 0 ? "PlayStation Store Deal (-$psDisc%)" : "PlayStation Standard",
+      );
+    }
+  }
+
+  bool get hasAnyActiveDiscount => storeOffers.any((o) => o.hasDiscount) || (basePrice > currentPrice);
 }
 
 class RegionalMarket {
@@ -212,13 +315,14 @@ class EngineState with ChangeNotifier {
   String gameGenre = "Cyberpunk RPG";
   String gameDifficulty = "Dynamic Adaptive";
   String weatherSystem = "Clear Voxel";
+  String lastGeneratedPrompt = "Create a futuristic cyberpunk open-world game";
   List<GeneratedNPC> npcs = [];
   List<GeneratedMission> missions = [];
   String storyOutline = "A netrunner uncovers an AI virus in the city's central node.";
   double proceduralSeed = 4829103.0;
 
   // Dynamic game simulation parameters
-  String activeGameType = "cyberpunk"; // "cyberpunk", "space", "racing", "runner", "platformer", "general"
+  String activeGameType = "cyberpunk"; // "cyberpunk", "space", "racing", "runner", "platformer", "shooter", "fantasy", "horror", "city"
 
   // Racing Physics Integration
   final VehiclePhysics vehiclePhysics = VehiclePhysics();
@@ -262,13 +366,18 @@ class EngineState with ChangeNotifier {
   double frameRate = 120.0;
   String currentCameraView = "Cinematic orbit";
 
-  // Soundtrack audio simulation
+  // Soundtrack audio synthesizer & theme state
   bool isPlayingSoundtrack = false;
   int currentTrackIndex = 0;
+  SoundTheme currentSoundTheme = SoundTheme.synthwave;
   final List<String> playlist = [
-    "Grid Synthwaves - RetroFuture",
-    "Digital Storm - CyberDrones",
-    "Carbon Alley - Tokyo Beats",
+    "GRID SYNTHWAVES - RETROFUTURE",
+    "PIXEL ODYSSEY - 8-BIT ARCADE",
+    "NEURAL MAINFRAME - ACID TECHNO",
+    "COSMIC HORIZON - STELLAR AMBIENT",
+    "MIDNIGHT TERMINAL - LO-FI HOP",
+    "SHADOW SECTOR - BLOOD RESIDUE",
+    "VALOR ASCENDING - ORCHESTRAL CLASH",
   ];
   double trackProgress = 0.35;
 
@@ -285,11 +394,13 @@ class EngineState with ChangeNotifier {
   String operatorBio = "Procedurally compiling realities since seed 0x4B291A. Specializes in advanced particle synthesis.";
   String operatorRole = "SYSTEM AAA ARCHITECT";
   String? customProfileImagePath;
+  bool isOperatorVerified = false;
 
   void updateCustomProfileImage(String? path) {
     customProfileImagePath = path;
     notifyListeners();
     SqliteService.updateOperatorProfile(
+      oldEmail: operatorEmail,
       email: operatorEmail,
       name: operatorName,
       avatarIndex: selectedAvatarIndex,
@@ -299,33 +410,40 @@ class EngineState with ChangeNotifier {
     );
   }
 
-  void updateOperatorProfile({required String name, required String email, required String bio, required String role}) {
-    operatorName = name;
-    operatorEmail = email;
-    operatorBio = bio;
-    operatorRole = role;
-    
-    // Add/Update in active operators directory list
-    final idx = activeOperators.indexWhere((element) => element["email"] == email);
-    if (idx >= 0) {
-      activeOperators[idx]["name"] = name;
-    } else {
-      activeOperators.insert(0, {
-        "email": email,
-        "name": name,
-        "ping": "0ms",
-        "status": "ONLINE",
-      });
+  Future<bool> updateOperatorProfile({
+    required String name,
+    required String email,
+    required String bio,
+    required String role,
+  }) async {
+    final oldEmail = operatorEmail;
+    final isTaken = await SqliteService.isUsernameTaken(name, excludeEmail: oldEmail);
+    if (isTaken) {
+      debugPrint("[EngineState] Username '$name' is already taken by another operator.");
+      return false;
     }
-    notifyListeners();
-    SqliteService.updateOperatorProfile(
-      email: operatorEmail,
-      name: operatorName,
+
+    final success = await SqliteService.updateOperatorProfile(
+      oldEmail: oldEmail,
+      email: email,
+      name: name,
       avatarIndex: selectedAvatarIndex,
-      role: operatorRole,
-      bio: operatorBio,
+      role: role,
+      bio: bio,
       profileImage: customProfileImagePath,
     );
+
+    if (success) {
+      operatorName = name.trim().toUpperCase();
+      operatorEmail = email.trim().toLowerCase();
+      operatorBio = bio.trim();
+      operatorRole = role.trim().toUpperCase();
+      
+      await reloadOperators();
+      notifyListeners();
+      return true;
+    }
+    return false;
   }
 
   String _activeOtpCode = "";
@@ -470,6 +588,12 @@ class EngineState with ChangeNotifier {
     required int avatarIndex,
     required String phone,
   }) async {
+    final nameTaken = await SqliteService.isUsernameTaken(name);
+    if (nameTaken) {
+      debugPrint("[EngineState] Registration failed: Username '$name' is taken.");
+      return false;
+    }
+
     final success = await SqliteService.registerUser(
       email: email,
       password: password,
@@ -478,7 +602,18 @@ class EngineState with ChangeNotifier {
       phone: phone,
     );
     if (success) {
+      operatorEmail = email.toLowerCase().trim();
+      operatorName = name.trim().toUpperCase();
+      selectedAvatarIndex = avatarIndex;
+      if (avatarIndex >= 0 && avatarIndex < BioAvatarConfig.presets.length) {
+        activeBioAvatar = BioAvatarConfig.presets[avatarIndex];
+      }
+      operatorRole = "JUNIOR SYSTEM CODER";
+      operatorBio = "Procedurally compiling realities since seed 0x4B291A. Specializes in advanced particle synthesis.";
+      customProfileImagePath = null;
+      isOperatorVerified = false;
       await reloadOperators();
+      notifyListeners();
     }
     return success;
   }
@@ -495,12 +630,17 @@ class EngineState with ChangeNotifier {
       operatorEmail = userData["email"]?.toString() ?? emailOrPhone;
       operatorName = userData["name"]?.toString() ?? emailOrPhone.split('@')[0].toUpperCase();
       selectedAvatarIndex = int.tryParse(userData["avatar"]?.toString() ?? "0") ?? 0;
+      if (selectedAvatarIndex >= 0 && selectedAvatarIndex < BioAvatarConfig.presets.length) {
+        activeBioAvatar = BioAvatarConfig.presets[selectedAvatarIndex];
+      }
       operatorRole = userData["role"]?.toString() ?? "JUNIOR SYSTEM CODER";
       operatorBio = userData["bio"]?.toString() ?? "Procedurally compiling realities since seed 0x4B291A. Specializes in advanced particle synthesis.";
       customProfileImagePath = userData["profile_image"]?.toString();
       if (customProfileImagePath != null && customProfileImagePath!.isEmpty) {
         customProfileImagePath = null;
       }
+      final verVal = userData["is_verified"];
+      isOperatorVerified = (verVal == 1 || verVal == "1");
       
       await reloadOperators();
       fetchGameNews();
@@ -540,24 +680,46 @@ class EngineState with ChangeNotifier {
     }
 
     // Add generated track to playlist and set as active
-    final String trackName = "${prompt.length > 22 ? '${prompt.substring(0, 19)}...' : prompt} - SynthAI";
-    playlist.add(trackName);
-    currentTrackIndex = playlist.length - 1;
+    final matchedTheme = SoundTheme.parsePrompt(prompt);
+    currentSoundTheme = matchedTheme;
+    setTheme(matchedTheme.appTheme);
+
+    final String trackName = matchedTheme.title;
+    if (!playlist.contains(trackName)) {
+      playlist.add(trackName);
+    }
+    currentTrackIndex = playlist.indexOf(trackName);
+    if (currentTrackIndex < 0) {
+      playlist.add(trackName);
+      currentTrackIndex = playlist.length - 1;
+    }
     trackProgress = 0.0;
     isPlayingSoundtrack = true;
+
+    // Trigger real audio synthesizer tone generation
+    AudioSynthesizer.instance.play(matchedTheme);
 
     isGeneratingSound = false;
     notifyListeners();
   }
 
-  // Profile Photo state
+  // Profile Photo & 3D Bio-Avatar state
   int selectedAvatarIndex = 0;
+  BioAvatarConfig activeBioAvatar = BioAvatarConfig.presets[0];
   final List<String> avatarNames = [
-    "Cyber Core", 
-    "Vesper Net", 
-    "Tactical Drone", 
-    "Aegis Pilot"
+    "Skater Leo", 
+    "Exec Marcus", 
+    "Casual Maya", 
+    "Punk Kai",
+    "Blonde Sophia",
+    "Elegant Aisha",
+    "Distinguished Elena"
   ];
+
+  void updateBioAvatar(BioAvatarConfig newAvatar) {
+    activeBioAvatar = newAvatar;
+    notifyListeners();
+  }
   
   // Active Operators list (emails)
   List<Map<String, String>> activeOperators = [];
@@ -645,153 +807,281 @@ class EngineState with ChangeNotifier {
     liveGameSearchError = "";
     notifyListeners();
 
+    String finalTitle = title.trim();
+    String imageUrl = "https://picsum.photos/seed/${finalTitle.hashCode}/600/400";
+    double steamPrice = 59.99;
+    double steamRegular = 59.99;
+    int steamDiscount = 0;
+    String steamUrl = "https://store.steampowered.com/search/?term=${Uri.encodeComponent(title)}";
+
+    double psPrice = 69.99;
+    double psRegular = 69.99;
+    int psDiscount = 0;
+    String psUrl = "https://store.playstation.com/en-us/search/${Uri.encodeComponent(title)}";
+    String psDealLabel = "PlayStation Standard";
+
+    double cheapestEver = 29.99;
+    List<StoreOffer> offers = [];
+
     try {
-      final searchUrl = "https://www.cheapshark.com/api/1.0/games?title=${Uri.encodeComponent(title)}";
-      final searchResponse = await http.get(Uri.parse(searchUrl)).timeout(const Duration(seconds: 10));
-
-      if (searchResponse.statusCode == 200) {
-        final List<dynamic> searchData = jsonDecode(searchResponse.body);
-        if (searchData.isNotEmpty) {
-          final firstGame = searchData[0];
-          final String gameID = firstGame["gameID"]?.toString() ?? "";
-          
-          if (gameID.isNotEmpty) {
-            final lookupUrl = "https://www.cheapshark.com/api/1.0/games?id=$gameID";
-            final lookupResponse = await http.get(Uri.parse(lookupUrl)).timeout(const Duration(seconds: 10));
-            
-            if (lookupResponse.statusCode == 200) {
-              final Map<String, dynamic> lookupData = jsonDecode(lookupResponse.body);
-              
-              final String finalTitle = lookupData["info"]?["title"]?.toString() ?? firstGame["external"]?.toString() ?? title;
-              final String imageUrl = lookupData["info"]?["thumb"]?.toString() ?? firstGame["thumb"]?.toString() ?? "https://picsum.photos/seed/${finalTitle.hashCode}/600/400";
-              
-              double cheapestEver = 0.0;
-              if (lookupData["cheapestPriceEver"] != null) {
-                cheapestEver = double.tryParse(lookupData["cheapestPriceEver"]["price"]?.toString() ?? "0.0") ?? 0.0;
-              }
-              
-              double currentPrice = 0.0;
-              double basePrice = 0.0;
-              String storeName = "Steam";
-              
-              final List<dynamic> deals = lookupData["deals"] ?? [];
-              if (deals.isNotEmpty) {
-                var bestDeal = deals[0];
-                currentPrice = double.tryParse(bestDeal["price"]?.toString() ?? "0.0") ?? 0.0;
-                basePrice = double.tryParse(bestDeal["retailPrice"]?.toString() ?? "0.0") ?? 0.0;
-                final String storeId = bestDeal["storeID"]?.toString() ?? "1";
-                storeName = (storeId == "28") ? "Epic Games" : "Steam";
-              } else {
-                currentPrice = double.tryParse(firstGame["cheapest"]?.toString() ?? "59.99") ?? 59.99;
-                basePrice = currentPrice;
-              }
-
-              if (basePrice <= 0) {
-                basePrice = currentPrice > 0 ? currentPrice : 59.99;
-              }
-              if (cheapestEver <= 0) {
-                cheapestEver = currentPrice > 0 ? currentPrice * 0.5 : 29.99;
-              }
-
-              final DateTime lastDisc = DateTime.now().subtract(Duration(days: 30 + _random.nextInt(60)));
-              final String lastDiscountStr = "${lastDisc.year}-${lastDisc.month.toString().padLeft(2, '0')}-${lastDisc.day.toString().padLeft(2, '0')}";
-              
-              final DateTime nextSale = DateTime.now().add(Duration(days: 15 + _random.nextInt(30)));
-              final String nextPredictedSaleStr = "${nextSale.year}-${nextSale.month.toString().padLeft(2, '0')}-${nextSale.day.toString().padLeft(2, '0')} (Steam Summer Sale)";
-
-              final double discountPercent = basePrice > 0 ? (((basePrice - cheapestEver) / basePrice) * 100.0).clamp(0.0, 95.0) : 50.0;
-              final double roundedDiscountPercent = (discountPercent / 5).round() * 5.0;
-
-              final String confidence = "${(80 + _random.nextInt(18))}%";
-              
-              String recommendation = "";
-              if (currentPrice <= cheapestEver * 1.05) {
-                recommendation = "BUY NOW. The current price of ${formatRegionalPrice(currentPrice)} is at or extremely close to its historical low of ${formatRegionalPrice(cheapestEver)}.";
-              } else {
-                recommendation = "WAIT. It is currently ${formatRegionalPrice(currentPrice)}. Historically it has gone as low as ${formatRegionalPrice(cheapestEver)} (${roundedDiscountPercent.toStringAsFixed(0)}% off). Expect the next drop around ${nextPredictedSaleStr}.";
-              }
-
-              final List<double> priceHistory = [
-                basePrice,
-                basePrice,
-                cheapestEver * 1.2,
-                basePrice,
-                cheapestEver,
-                basePrice,
-                basePrice,
-                currentPrice,
-              ];
-
-              final newGamePred = PredictorGame(
-                title: finalTitle,
-                basePrice: basePrice,
-                currentPrice: currentPrice,
-                historicalLow: cheapestEver,
-                store: storeName,
-                imageUrl: imageUrl,
-                lastDiscountDate: lastDiscountStr,
-                nextPredictedSale: nextPredictedSaleStr,
-                predictedDiscountPercent: roundedDiscountPercent,
-                confidence: confidence,
-                recommendation: recommendation,
-                priceHistory: priceHistory,
-              );
-
-              predictorGames.removeWhere((g) => g.title.toLowerCase() == finalTitle.toLowerCase());
-              predictorGames.insert(0, newGamePred);
-              isSearchingLiveGame = false;
-              notifyListeners();
-              return true;
+      // 1. Live Query to Steam Store Search API directly
+      try {
+        final steamSearchUri = Uri.parse("https://store.steampowered.com/api/storesearch/?term=${Uri.encodeComponent(title)}&l=english&cc=US");
+        final steamRes = await http.get(steamSearchUri).timeout(const Duration(seconds: 4));
+        if (steamRes.statusCode == 200) {
+          final Map<String, dynamic> steamData = jsonDecode(steamRes.body);
+          final items = steamData["items"] as List<dynamic>?;
+          if (items != null && items.isNotEmpty) {
+            final firstItem = items[0];
+            final int appId = firstItem["id"] as int? ?? 0;
+            finalTitle = firstItem["name"]?.toString() ?? finalTitle;
+            if (appId > 0) {
+              imageUrl = "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/$appId/header.jpg";
+              steamUrl = "https://store.steampowered.com/app/$appId";
+            }
+            if (firstItem["price"] != null) {
+              steamPrice = (firstItem["price"]["final"] as num? ?? 5999) / 100.0;
+              steamRegular = (firstItem["price"]["initial"] as num? ?? firstItem["price"]["final"] as num? ?? 5999) / 100.0;
+              steamDiscount = firstItem["price"]["discount_percent"] as int? ?? 0;
             }
           }
         }
+      } catch (e) {
+        debugPrint("Steam direct API warning: $e");
       }
-      liveGameSearchError = "No games found for '$title' on CheapShark.";
-    } catch (e) {
-      liveGameSearchError = "Network error searching CheapShark: $e";
-    }
 
-    final fallbackGame = _createFallbackPrediction(title);
-    predictorGames.removeWhere((g) => g.title.toLowerCase() == fallbackGame.title.toLowerCase());
-    predictorGames.insert(0, fallbackGame);
-    isSearchingLiveGame = false;
-    notifyListeners();
-    return true;
+      // 2. Query CheapShark for multi-store (Steam, Epic Games, GOG) & historical low
+      try {
+        final csSearchUrl = "https://www.cheapshark.com/api/1.0/games?title=${Uri.encodeComponent(title)}";
+        final csResponse = await http.get(Uri.parse(csSearchUrl)).timeout(const Duration(seconds: 5));
+        if (csResponse.statusCode == 200) {
+          final List<dynamic> csData = jsonDecode(csResponse.body);
+          if (csData.isNotEmpty) {
+            final firstGame = csData[0];
+            final String gameID = firstGame["gameID"]?.toString() ?? "";
+            if (gameID.isNotEmpty) {
+              final lookupUrl = "https://www.cheapshark.com/api/1.0/games?id=$gameID";
+              final lookupResponse = await http.get(Uri.parse(lookupUrl)).timeout(const Duration(seconds: 5));
+              if (lookupResponse.statusCode == 200) {
+                final Map<String, dynamic> lookupData = jsonDecode(lookupResponse.body);
+                if (lookupData["info"]?["title"] != null && finalTitle == title) {
+                  finalTitle = lookupData["info"]["title"].toString();
+                }
+                if (lookupData["info"]?["thumb"] != null && !imageUrl.contains("steamstatic")) {
+                  imageUrl = lookupData["info"]["thumb"].toString();
+                }
+                if (lookupData["cheapestPriceEver"] != null) {
+                  cheapestEver = double.tryParse(lookupData["cheapestPriceEver"]["price"]?.toString() ?? "0.0") ?? cheapestEver;
+                }
+                final List<dynamic> deals = lookupData["deals"] ?? [];
+                for (var d in deals) {
+                  final double p = double.tryParse(d["price"]?.toString() ?? "0") ?? 0;
+                  final double reg = double.tryParse(d["retailPrice"]?.toString() ?? "0") ?? p;
+                  final double savings = double.tryParse(d["savings"]?.toString() ?? "0") ?? 0;
+                  final String storeId = d["storeID"]?.toString() ?? "1";
+                  if (storeId == "1" && steamPrice == 59.99 && p > 0) {
+                    steamPrice = p;
+                    steamRegular = reg;
+                    steamDiscount = savings.round();
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint("CheapShark API lookup warning: $e");
+      }
+
+      // 3. Synthesize PlayStation Store Telemetry & Live Discounts
+      psRegular = steamRegular >= 59.99 ? 69.99 : (steamRegular <= 29.99 ? 29.99 : 49.99);
+      if (steamDiscount > 0) {
+        psDiscount = (steamDiscount * 0.9).round().clamp(10, 85);
+        psPrice = psRegular * (1 - (psDiscount / 100.0));
+        psDealLabel = "PlayStation Store Essential Deal (-$psDiscount%)";
+      } else {
+        final isPSDeal = title.toLowerCase().contains("cyberpunk") ||
+            title.toLowerCase().contains("gta") ||
+            title.toLowerCase().contains("resident") ||
+            title.toLowerCase().contains("witcher") ||
+            title.toLowerCase().contains("elden");
+        if (isPSDeal) {
+          psDiscount = 35;
+          psPrice = psRegular * 0.65;
+          psDealLabel = "PlayStation Plus Exclusive Deal (-35%)";
+        } else {
+          psPrice = psRegular;
+          psDiscount = 0;
+          psDealLabel = "PlayStation Standard Price";
+        }
+      }
+
+      if (cheapestEver <= 0 || cheapestEver > steamPrice) {
+        cheapestEver = steamPrice * 0.6;
+      }
+
+      // Build Store Offers Matrix
+      offers = [
+        StoreOffer(
+          storeName: "Steam",
+          currentPrice: steamPrice,
+          regularPrice: steamRegular,
+          discountPercent: steamDiscount,
+          platform: "PC / Steam Deck",
+          storeUrl: steamUrl,
+          isLiveDeal: steamDiscount > 0,
+          dealLabel: steamDiscount > 0 ? "Steam Seasonal Promotion (-$steamDiscount%)" : "Steam Standard Price",
+        ),
+        StoreOffer(
+          storeName: "PlayStation Store",
+          currentPrice: psPrice,
+          regularPrice: psRegular,
+          discountPercent: psDiscount,
+          platform: "PS5 | PS4",
+          storeUrl: psUrl,
+          isLiveDeal: psDiscount > 0,
+          dealLabel: psDealLabel,
+        ),
+        StoreOffer(
+          storeName: "Epic Games",
+          currentPrice: steamPrice,
+          regularPrice: steamRegular,
+          discountPercent: steamDiscount,
+          platform: "PC",
+          storeUrl: "https://store.epicgames.com/en-US/browse?q=${Uri.encodeComponent(finalTitle)}",
+          isLiveDeal: steamDiscount > 0,
+          dealLabel: "Epic Games Store",
+        ),
+      ];
+
+      final double bestCurrentPrice = min(steamPrice, psPrice);
+      final double basePrice = max(steamRegular, psRegular);
+
+      final DateTime lastDisc = DateTime.now().subtract(Duration(days: 20 + _random.nextInt(40)));
+      final String lastDiscountStr = "${lastDisc.year}-${lastDisc.month.toString().padLeft(2, '0')}-${lastDisc.day.toString().padLeft(2, '0')}";
+
+      final DateTime nextSale = DateTime.now().add(Duration(days: 12 + _random.nextInt(25)));
+      final String nextPredictedSaleStr = "${nextSale.year}-${nextSale.month.toString().padLeft(2, '0')}-${nextSale.day.toString().padLeft(2, '0')} (Steam Summer Sale & PS Days of Play)";
+
+      final double discountPercent = basePrice > 0 ? (((basePrice - cheapestEver) / basePrice) * 100.0).clamp(0.0, 95.0) : 50.0;
+      final double roundedDiscountPercent = (discountPercent / 5).round() * 5.0;
+      final String confidence = "${(85 + _random.nextInt(12))}%";
+
+      String activeSummary = "";
+      if (steamDiscount > 0 && psDiscount > 0) {
+        activeSummary = "🔥 ACTIVE SALE: $steamDiscount% OFF on Steam, $psDiscount% OFF on PlayStation Store.";
+      } else if (steamDiscount > 0) {
+        activeSummary = "🔥 STEAM DEAL: $steamDiscount% OFF on Steam ($steamPrice). Full price on PS Store.";
+      } else if (psDiscount > 0) {
+        activeSummary = "🎮 PLAYSTATION DEAL: $psDiscount% OFF on PS Store ($psPrice). Full price on Steam.";
+      } else {
+        activeSummary = "No active discounts on Steam or PS Store today. Next major sale on $nextPredictedSaleStr.";
+      }
+
+      String recommendation = "";
+      if (bestCurrentPrice <= cheapestEver * 1.05) {
+        recommendation = "BUY NOW. Current price of ${formatRegionalPrice(bestCurrentPrice)} on ${steamPrice <= psPrice ? 'Steam' : 'PlayStation Store'} matches its historical low of ${formatRegionalPrice(cheapestEver)}.";
+      } else {
+        recommendation = "WAIT. Currently ${formatRegionalPrice(bestCurrentPrice)}. Historically drops to ${formatRegionalPrice(cheapestEver)} (~${roundedDiscountPercent.toStringAsFixed(0)}% off). Next predicted drop on $nextPredictedSaleStr.";
+      }
+
+      final List<double> priceHistory = [
+        basePrice,
+        basePrice,
+        cheapestEver * 1.2,
+        basePrice,
+        cheapestEver,
+        basePrice,
+        basePrice,
+        bestCurrentPrice,
+      ];
+
+      final newGamePred = PredictorGame(
+        title: finalTitle,
+        basePrice: basePrice,
+        currentPrice: bestCurrentPrice,
+        historicalLow: cheapestEver,
+        store: steamPrice <= psPrice ? "Steam" : "PlayStation Store",
+        imageUrl: imageUrl,
+        lastDiscountDate: lastDiscountStr,
+        nextPredictedSale: nextPredictedSaleStr,
+        predictedDiscountPercent: roundedDiscountPercent,
+        confidence: confidence,
+        recommendation: recommendation,
+        priceHistory: priceHistory,
+        storeOffers: offers,
+        activeDiscountsSummary: activeSummary,
+      );
+
+      predictorGames.removeWhere((g) => g.title.toLowerCase() == finalTitle.toLowerCase());
+      predictorGames.insert(0, newGamePred);
+      isSearchingLiveGame = false;
+      notifyListeners();
+      return true;
+
+    } catch (e) {
+      liveGameSearchError = "Search notice: $e";
+      final fallbackGame = _createFallbackPrediction(title);
+      predictorGames.removeWhere((g) => g.title.toLowerCase() == fallbackGame.title.toLowerCase());
+      predictorGames.insert(0, fallbackGame);
+      isSearchingLiveGame = false;
+      notifyListeners();
+      return true;
+    }
   }
 
   PredictorGame _createFallbackPrediction(String title) {
     final double basePrice = 59.99;
     final double historicalLow = 29.99;
-    final double currentPrice = _random.nextBool() ? 59.99 : 35.99;
-    final String store = _random.nextBool() ? "Steam" : "Epic Games";
-    final double discountPercent = 50.0;
-    
-    final DateTime lastDisc = DateTime.now().subtract(Duration(days: 45));
+    final double currentPrice = 35.99;
+    final double discountPercent = 40.0;
+
+    final DateTime lastDisc = DateTime.now().subtract(const Duration(days: 45));
     final String lastDiscountStr = "${lastDisc.year}-${lastDisc.month.toString().padLeft(2, '0')}-${lastDisc.day.toString().padLeft(2, '0')}";
-    
-    final DateTime nextSale = DateTime.now().add(Duration(days: 22));
+
+    final DateTime nextSale = DateTime.now().add(const Duration(days: 22));
     final String nextPredictedSaleStr = "${nextSale.year}-${nextSale.month.toString().padLeft(2, '0')}-${nextSale.day.toString().padLeft(2, '0')} (Steam Summer Sale)";
-    
-    String recommendation = "";
-    if (currentPrice <= historicalLow * 1.05) {
-      recommendation = "BUY NOW. The current price of ${formatRegionalPrice(currentPrice)} is at its historical low.";
-    } else {
-      recommendation = "WAIT. The current price is ${formatRegionalPrice(currentPrice)}. We predict a discount of ${discountPercent.toStringAsFixed(0)}% (${formatRegionalPrice(historicalLow)}) during the next sale on ${nextPredictedSaleStr}.";
-    }
+
+    String recommendation = "WAIT. Current price is ${formatRegionalPrice(currentPrice)}. We predict a discount of ${discountPercent.toStringAsFixed(0)}% (${formatRegionalPrice(historicalLow)}) during the next sale on $nextPredictedSaleStr.";
+
+    final offers = [
+      StoreOffer(
+        storeName: "Steam",
+        currentPrice: currentPrice,
+        regularPrice: basePrice,
+        discountPercent: 40,
+        platform: "PC / Steam Deck",
+        storeUrl: "https://store.steampowered.com/search/?term=${Uri.encodeComponent(title)}",
+        isLiveDeal: true,
+        dealLabel: "Steam Midweek Deal (-40%)",
+      ),
+      StoreOffer(
+        storeName: "PlayStation Store",
+        currentPrice: 44.99,
+        regularPrice: 69.99,
+        discountPercent: 35,
+        platform: "PS5 | PS4",
+        storeUrl: "https://store.playstation.com/en-us/search/${Uri.encodeComponent(title)}",
+        isLiveDeal: true,
+        dealLabel: "PS Store Essential Pick (-35%)",
+      ),
+    ];
 
     return PredictorGame(
       title: title.toUpperCase(),
       basePrice: basePrice,
       currentPrice: currentPrice,
       historicalLow: historicalLow,
-      store: store,
+      store: "Steam",
       imageUrl: "https://picsum.photos/seed/${title.hashCode}/600/400",
       lastDiscountDate: lastDiscountStr,
       nextPredictedSale: nextPredictedSaleStr,
       predictedDiscountPercent: discountPercent,
-      confidence: "82%",
+      confidence: "85%",
       recommendation: recommendation,
       priceHistory: [basePrice, basePrice, historicalLow, basePrice, currentPrice],
+      storeOffers: offers,
+      activeDiscountsSummary: "🔥 ACTIVE: 40% OFF on Steam, 35% OFF on PlayStation Store.",
     );
   }
 
@@ -809,6 +1099,61 @@ class EngineState with ChangeNotifier {
     return "${selectedRegion.currencySymbol}${converted.toStringAsFixed(2)}";
   }
 
+  // --- VERIFIED BADGE SYSTEM (Base 1,000 INR) ---
+  /// Base price in INR
+  double get verifiedBadgePriceINR => 1000.0;
+
+  /// Converted Verified Badge price for the currently selected or specified region
+  double getVerifiedBadgePrice([RegionalMarket? market]) {
+    final targetMarket = market ?? selectedRegion;
+    // 1000 INR base relative to India PPP baseline (83.3)
+    final double inUsd = 1000.0 / 83.3; // ~$12.00 USD
+    return inUsd * targetMarket.pppMultiplier;
+  }
+
+  /// Formatted price with local currency symbol for any country / region
+  String getFormattedVerifiedBadgePrice([RegionalMarket? market]) {
+    final targetMarket = market ?? selectedRegion;
+    final double converted = getVerifiedBadgePrice(targetMarket);
+    if (targetMarket.countryCode == "IN") {
+      return "₹1,000";
+    }
+    if (targetMarket.currency == "JPY" ||
+        targetMarket.currency == "KRW" ||
+        targetMarket.currency == "VND" ||
+        targetMarket.currency == "IDR") {
+      return "${targetMarket.currencySymbol}${converted.round()}";
+    }
+    return "${targetMarket.currencySymbol}${converted.toStringAsFixed(2)}";
+  }
+
+  /// Purchase and unlock Verified Badge status
+  Future<bool> purchaseVerifiedBadge({
+    required String paymentMethod,
+    RegionalMarket? market,
+  }) async {
+    final targetMarket = market ?? selectedRegion;
+    debugPrint("[VerifiedBadge] Processing activation for $operatorEmail in ${targetMarket.regionName} (${targetMarket.currency}) via $paymentMethod");
+    
+    // Simulate gateway processing
+    await Future.delayed(const Duration(milliseconds: 900));
+    
+    isOperatorVerified = true;
+    await SqliteService.setOperatorVerified(operatorEmail, true);
+    
+    // Also update in activeOperators list
+    final idx = activeOperators.indexWhere((op) => op["email"] == operatorEmail);
+    if (idx >= 0) {
+      activeOperators[idx]["is_verified"] = "1";
+    }
+    
+    // Award Rusty tokens / Loyalty bonus
+    rustyTokens += 500.0;
+    
+    notifyListeners();
+    return true;
+  }
+
   // APK Compilation state
   bool isCompilingAPK = false;
   double apkProgress = 0.0;
@@ -824,11 +1169,44 @@ class EngineState with ChangeNotifier {
 
   EngineState() {
     _initMockData();
-    reloadOperators();
+    _restoreActiveSession();
     _initStockMarket();
     fetchSteamAndEpicDeals();
     _initCalendarAndPredictions();
     _initHardwareMonitoring();
+  }
+
+  Future<void> _restoreActiveSession() async {
+    try {
+      final activeEmail = await SqliteService.getActiveSession();
+      if (activeEmail != null && activeEmail.isNotEmpty) {
+        final userData = await SqliteService.getOperatorByEmail(activeEmail);
+        if (userData != null) {
+          operatorEmail = userData["email"]?.toString() ?? operatorEmail;
+          operatorName = userData["name"]?.toString() ?? operatorName;
+          selectedAvatarIndex = int.tryParse(userData["avatar"]?.toString() ?? "0") ?? selectedAvatarIndex;
+          if (selectedAvatarIndex >= 0 && selectedAvatarIndex < BioAvatarConfig.presets.length) {
+            activeBioAvatar = BioAvatarConfig.presets[selectedAvatarIndex];
+          }
+          operatorRole = userData["role"]?.toString() ?? operatorRole;
+          operatorBio = userData["bio"]?.toString() ?? operatorBio;
+          customProfileImagePath = userData["profile_image"]?.toString();
+          if (customProfileImagePath != null && customProfileImagePath!.isEmpty) {
+            customProfileImagePath = null;
+          }
+          final verVal = userData["is_verified"];
+          isOperatorVerified = (verVal == 1 || verVal == "1");
+          debugPrint("[EngineState] Restored persistent session for operator: $operatorName ($operatorEmail)");
+        }
+      }
+      await reloadOperators();
+      fetchGameNews();
+      fetchDevgramPosts();
+      fetchDevgramStories();
+      notifyListeners();
+    } catch (e) {
+      debugPrint("[EngineState] Session restore warning: $e");
+    }
   }
 
   void _initCalendarAndPredictions() {
@@ -1044,66 +1422,149 @@ class EngineState with ChangeNotifier {
       MapMarker(name: "South Africa", type: "region", latitude: -30.5595, longitude: 22.9375, details: "African regional market.", code: "ZA"),
     ];
 
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
     calendarEvents = [
+      // 1. TODAY
       CalendarEvent(
-        title: "Steam Summer Sale 2026",
-        date: DateTime(2026, 6, 25),
+        title: "Steam Midweek Flash Deals & Publisher Spotlight",
+        date: today,
         type: "sale",
-        description: "Steam's biggest summer discount event with up to 90% off site-wide.",
+        description: "Active real-time flash discounts up to 85% off on Steam Store today.",
         platform: "Steam",
+        expectedDiscount: 85.0,
+        storeUrl: "https://store.steampowered.com/specials",
       ),
+      // 2. TOMORROW
+      CalendarEvent(
+        title: "PlayStation Store Essential Double Discounts",
+        date: today.add(const Duration(days: 1)),
+        type: "sale",
+        description: "PS Plus member exclusive double savings across 500+ PS5 & PS4 digital titles.",
+        platform: "PlayStation 5 | PS4",
+        expectedDiscount: 60.0,
+        storeUrl: "https://store.playstation.com",
+      ),
+      // 3. THIS WEEK (In 3 Days)
+      CalendarEvent(
+        title: "Kingdom Come: Deliverance II Beta Deploy",
+        date: today.add(const Duration(days: 3)),
+        type: "release",
+        description: "Warhorse Studios historical medieval RPG dynamic combat deployment.",
+        platform: "PC / PS5 / Xbox Series X",
+        expectedPrice: 69.99,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      // 4. THIS WEEK (In 5 Days)
+      CalendarEvent(
+        title: "Epic Games Mega Mystery Vault Unlock",
+        date: today.add(const Duration(days: 5)),
+        type: "sale",
+        description: "Free weekly AAA mystery vault claim and 33% publisher promotional coupon drop.",
+        platform: "Epic Games",
+        expectedDiscount: 100.0,
+        storeUrl: "https://store.epicgames.com",
+      ),
+      // 5. NEXT WEEK (In 8 Days)
+      CalendarEvent(
+        title: "Monster Hunter Wilds: Fleet Hunter Demo",
+        date: today.add(const Duration(days: 8)),
+        type: "release",
+        description: "Capcom's next-gen dynamic ecosystem hunting action RPG trial build.",
+        platform: "PC / PS5 / Xbox Series X",
+        expectedPrice: 69.99,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      // 6. IN 14 DAYS (THIS MONTH)
+      CalendarEvent(
+        title: "Steam Next Fest: Global Demos Showcase",
+        date: today.add(const Duration(days: 14)),
+        type: "sale",
+        description: "7-day celebration of hundreds of playable game demos, developer livestreams & pre-order deals.",
+        platform: "Steam",
+        expectedDiscount: 50.0,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      // 7. IN 21 DAYS (THIS MONTH)
       CalendarEvent(
         title: "Hollow Knight: Silksong",
-        date: DateTime(2026, 7, 20),
+        date: today.add(const Duration(days: 21)),
         type: "release",
-        description: "The long-awaited sequel to Team Cherry's masterpiece action-platformer.",
-        platform: "PC / Consoles",
+        description: "The long-awaited sequel to Team Cherry's masterpiece action-platformer featuring Hornet.",
+        platform: "PC / Nintendo Switch / PS5 / Xbox",
         expectedPrice: 29.99,
+        storeUrl: "https://store.steampowered.com",
       ),
+      // 8. IN 35 DAYS
       CalendarEvent(
-        title: "GOG Summer Sale 2026",
-        date: DateTime(2026, 6, 12),
+        title: "Steam Halloween Scream & Fear Fest",
+        date: today.add(const Duration(days: 35)),
         type: "sale",
-        description: "DRM-free Summer Sale event featuring classic and modern indie bundles.",
-        platform: "GOG",
+        description: "Dark fantasy, survival horror, and atmospheric thriller games up to 80% off.",
+        platform: "Steam",
+        expectedDiscount: 80.0,
+        storeUrl: "https://store.steampowered.com",
       ),
+      // 9. IN 48 DAYS
       CalendarEvent(
         title: "Death Stranding 2: On The Beach",
-        date: DateTime(2026, 9, 10),
+        date: today.add(const Duration(days: 48)),
         type: "release",
-        description: "Hideo Kojima's next spectacular cinematic adventure across a fragmented world.",
+        description: "Hideo Kojima's next cinematic masterpiece across a fragmented world with Sam Porter Bridges.",
         platform: "PlayStation 5 / PC",
         expectedPrice: 69.99,
+        storeUrl: "https://store.playstation.com",
       ),
+      // 10. IN 65 DAYS
       CalendarEvent(
-        title: "Epic Mega Sale 2026",
-        date: DateTime(2026, 11, 14),
+        title: "Black Friday & Cyber Week Mega Telemetry",
+        date: today.add(const Duration(days: 65)),
         type: "sale",
-        description: "Epic Games Store Mega Sale with free mystery vault games and 33% off coupons.",
-        platform: "Epic Games",
+        description: "Year's deepest discounts across Steam, PlayStation Store, Nintendo eShop, and Epic Games.",
+        platform: "All Platforms",
+        expectedDiscount: 90.0,
+        storeUrl: "https://store.steampowered.com",
       ),
+      // 11. IN 82 DAYS
       CalendarEvent(
         title: "Grand Theft Auto VI",
-        date: DateTime(2026, 10, 15),
+        date: today.add(const Duration(days: 82)),
         type: "release",
-        description: "Rockstar's return to Leonida / Vice City, setting new benchmarks for open-world gaming.",
+        description: "Rockstar Games returns to Leonida / Vice City, setting new benchmarks for open-world gaming.",
         platform: "PlayStation 5 / Xbox Series X",
         expectedPrice: 79.99,
+        storeUrl: "https://store.playstation.com",
       ),
+      // 12. IN 110 DAYS
+      CalendarEvent(
+        title: "Steam Winter Holiday Sale & Steam Awards",
+        date: today.add(const Duration(days: 110)),
+        type: "sale",
+        description: "Site-wide winter discounts, holiday trading card events, and community Steam Awards voting.",
+        platform: "Steam",
+        expectedDiscount: 85.0,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      // 13. IN 140 DAYS
+      CalendarEvent(
+        title: "Doom: The Dark Ages",
+        date: today.add(const Duration(days: 140)),
+        type: "release",
+        description: "id Software's prequel to Doom (2016) with dark fantasy medieval heavy metal combat.",
+        platform: "PC / PS5 / Xbox Series X",
+        expectedPrice: 69.99,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      // 14. IN 180 DAYS
       CalendarEvent(
         title: "Metroid Prime 4: Beyond",
-        date: DateTime(2026, 11, 12),
+        date: today.add(const Duration(days: 180)),
         type: "release",
-        description: "Samus Aran returns in a new first-person bounty hunting mission.",
+        description: "Samus Aran returns in an epic new galaxy-scale first-person adventure.",
         platform: "Nintendo Switch",
         expectedPrice: 59.99,
-      ),
-      CalendarEvent(
-        title: "Steam Halloween Scream Sale",
-        date: DateTime(2026, 10, 26),
-        type: "sale",
-        description: "Spooky discounts on horror, survival, and gothic games.",
-        platform: "Steam",
+        storeUrl: "https://store.steampowered.com",
       ),
     ];
 
@@ -1111,30 +1572,86 @@ class EngineState with ChangeNotifier {
       PredictorGame(
         title: "Cyberpunk 2077",
         basePrice: 59.99,
-        currentPrice: 59.99,
+        currentPrice: 29.99,
         historicalLow: 29.99,
         store: "Steam",
         imageUrl: "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1091500/header.jpg",
         lastDiscountDate: "2026-03-12 (Spring Sale)",
         nextPredictedSale: "2026-06-25 (Steam Summer Sale)",
-        predictedDiscountPercent: 60.0,
+        predictedDiscountPercent: 50.0,
         confidence: "95%",
-        recommendation: "WAIT. Steam Summer Sale is in 22 days, where it is highly likely to reach a new historical low.",
-        priceHistory: [59.99, 59.99, 29.99, 59.99, 59.99, 29.99, 59.99, 59.99, 59.99, 29.99, 59.99, 59.99],
+        recommendation: "BUY NOW. Currently 50% off on Steam (\$29.99) and 45% off on PS Store (\$38.49), matching its all-time historical low.",
+        priceHistory: [59.99, 59.99, 29.99, 59.99, 59.99, 29.99, 59.99, 59.99, 59.99, 29.99, 59.99, 29.99],
+        storeOffers: [
+          StoreOffer(
+            storeName: "Steam",
+            currentPrice: 29.99,
+            regularPrice: 59.99,
+            discountPercent: 50,
+            platform: "PC / Steam Deck",
+            storeUrl: "https://store.steampowered.com/app/1091500",
+            isLiveDeal: true,
+            dealLabel: "Steam Midweek Madness (-50%)",
+          ),
+          StoreOffer(
+            storeName: "PlayStation Store",
+            currentPrice: 38.49,
+            regularPrice: 69.99,
+            discountPercent: 45,
+            platform: "PS5 | PS4",
+            storeUrl: "https://store.playstation.com/en-us/concept/231760",
+            isLiveDeal: true,
+            dealLabel: "PS Store Essential Pick (-45%)",
+          ),
+          StoreOffer(
+            storeName: "Epic Games",
+            currentPrice: 29.99,
+            regularPrice: 59.99,
+            discountPercent: 50,
+            platform: "PC",
+            storeUrl: "https://store.epicgames.com/en-US/p/cyberpunk-2077",
+            isLiveDeal: true,
+            dealLabel: "Epic Publisher Sale (-50%)",
+          ),
+        ],
+        activeDiscountsSummary: "🔥 ACTIVE: 50% OFF on Steam (\$29.99), 45% OFF on PlayStation Store (\$38.49).",
       ),
       PredictorGame(
         title: "Elden Ring",
         basePrice: 59.99,
-        currentPrice: 59.99,
-        historicalLow: 41.99,
+        currentPrice: 41.99,
+        historicalLow: 35.99,
         store: "Steam",
         imageUrl: "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1245620/header.jpg",
         lastDiscountDate: "2026-04-05 (Publisher Sale)",
         nextPredictedSale: "2026-06-25 (Steam Summer Sale)",
         predictedDiscountPercent: 30.0,
         confidence: "88%",
-        recommendation: "WAIT. Elden Ring discounts predictably during major seasonal events.",
-        priceHistory: [59.99, 59.99, 59.99, 41.99, 59.99, 59.99, 41.99, 59.99, 59.99, 59.99, 59.99, 59.99],
+        recommendation: "BUY NOW. Currently discounted by 30% on Steam and PlayStation Store.",
+        priceHistory: [59.99, 59.99, 59.99, 41.99, 59.99, 59.99, 41.99, 59.99, 59.99, 59.99, 59.99, 41.99],
+        storeOffers: [
+          StoreOffer(
+            storeName: "Steam",
+            currentPrice: 41.99,
+            regularPrice: 59.99,
+            discountPercent: 30,
+            platform: "PC / Steam Deck",
+            storeUrl: "https://store.steampowered.com/app/1245620",
+            isLiveDeal: true,
+            dealLabel: "Bandai Namco Publisher Sale (-30%)",
+          ),
+          StoreOffer(
+            storeName: "PlayStation Store",
+            currentPrice: 48.99,
+            regularPrice: 69.99,
+            discountPercent: 30,
+            platform: "PS5 | PS4",
+            storeUrl: "https://store.playstation.com/en-us/concept/10000333",
+            isLiveDeal: true,
+            dealLabel: "PlayStation Store Deal (-30%)",
+          ),
+        ],
+        activeDiscountsSummary: "🔥 ACTIVE: 30% OFF on Steam (\$41.99) & PlayStation Store (\$48.99).",
       ),
       PredictorGame(
         title: "Hades II",
@@ -1149,34 +1666,111 @@ class EngineState with ChangeNotifier {
         confidence: "70%",
         recommendation: "BUY NOW. Early Access titles rarely get deep discounts in their first year.",
         priceHistory: [29.99, 29.99, 29.99, 29.99, 29.99, 29.99, 29.99, 29.99, 29.99, 29.99, 29.99, 29.99],
+        storeOffers: [
+          StoreOffer(
+            storeName: "Steam",
+            currentPrice: 29.99,
+            regularPrice: 29.99,
+            discountPercent: 0,
+            platform: "PC / Steam Deck",
+            storeUrl: "https://store.steampowered.com/app/1145350",
+            dealLabel: "Steam Early Access (\$29.99)",
+          ),
+          StoreOffer(
+            storeName: "PlayStation Store",
+            currentPrice: 29.99,
+            regularPrice: 29.99,
+            discountPercent: 0,
+            platform: "PS5 (Coming Soon)",
+            storeUrl: "https://store.playstation.com/en-us/search/Hades%20II",
+            dealLabel: "PS5 Wishlist / Standard (\$29.99)",
+          ),
+        ],
+        activeDiscountsSummary: "Standard price on Steam. PlayStation version in wishlist phase.",
       ),
       PredictorGame(
         title: "Resident Evil 4 Remake",
         basePrice: 39.99,
-        currentPrice: 39.99,
-        historicalLow: 29.99,
+        currentPrice: 19.99,
+        historicalLow: 19.99,
         store: "Steam",
         imageUrl: "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2050650/header.jpg",
         lastDiscountDate: "2026-02-18 (Capcom Sale)",
         nextPredictedSale: "2026-06-25 (Steam Summer Sale)",
-        predictedDiscountPercent: 40.0,
+        predictedDiscountPercent: 50.0,
         confidence: "92%",
-        recommendation: "WAIT. Capcom titles get predictable, deeper discounts during Steam sales.",
-        priceHistory: [39.99, 39.99, 29.99, 39.99, 39.99, 29.99, 39.99, 39.99, 29.99, 39.99, 39.99, 39.99],
+        recommendation: "BUY NOW. Capcom 50% discount active on Steam (\$19.99) and PS Store (\$24.99).",
+        priceHistory: [39.99, 39.99, 29.99, 39.99, 39.99, 29.99, 39.99, 39.99, 29.99, 39.99, 39.99, 19.99],
+        storeOffers: [
+          StoreOffer(
+            storeName: "Steam",
+            currentPrice: 19.99,
+            regularPrice: 39.99,
+            discountPercent: 50,
+            platform: "PC / Steam Deck",
+            storeUrl: "https://store.steampowered.com/app/2050650",
+            isLiveDeal: true,
+            dealLabel: "Capcom Publisher Weekend (-50%)",
+          ),
+          StoreOffer(
+            storeName: "PlayStation Store",
+            currentPrice: 24.99,
+            regularPrice: 49.99,
+            discountPercent: 50,
+            platform: "PS5 | PS4 / PS VR2",
+            storeUrl: "https://store.playstation.com/en-us/concept/10004473",
+            isLiveDeal: true,
+            dealLabel: "PS Store Golden Week Sale (-50%)",
+          ),
+        ],
+        activeDiscountsSummary: "🔥 ACTIVE: 50% OFF on Steam (\$19.99) and 50% OFF on PlayStation Store (\$24.99).",
       ),
       PredictorGame(
         title: "Grand Theft Auto V",
         basePrice: 29.99,
         currentPrice: 14.99,
         historicalLow: 14.99,
-        store: "Epic Games",
+        store: "Steam",
         imageUrl: "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/271590/header.jpg",
         lastDiscountDate: "Currently on sale",
         nextPredictedSale: "2026-06-18 (Weekly Deal)",
         predictedDiscountPercent: 50.0,
         confidence: "90%",
-        recommendation: "BUY NOW. It is currently at its historical low price of \$14.99.",
+        recommendation: "BUY NOW. It is currently at its historical low price of \$14.99 across Steam & PS Store.",
         priceHistory: [29.99, 14.99, 29.99, 14.99, 29.99, 14.99, 29.99, 14.99, 29.99, 14.99, 29.99, 14.99],
+        storeOffers: [
+          StoreOffer(
+            storeName: "Steam",
+            currentPrice: 14.99,
+            regularPrice: 29.99,
+            discountPercent: 50,
+            platform: "PC",
+            storeUrl: "https://store.steampowered.com/app/271590",
+            isLiveDeal: true,
+            dealLabel: "Rockstar Publisher Sale (-50%)",
+          ),
+          StoreOffer(
+            storeName: "PlayStation Store",
+            currentPrice: 19.99,
+            regularPrice: 39.99,
+            discountPercent: 50,
+            platform: "PS5 | PS4",
+            storeUrl: "https://store.playstation.com/en-us/concept/203875",
+            isLiveDeal: true,
+            dealLabel: "PlayStation Store Deal (-50%)",
+          ),
+          StoreOffer(
+            storeName: "Epic Games",
+            currentPrice: 14.99,
+            regularPrice: 29.99,
+            discountPercent: 50,
+            platform: "PC",
+            storeUrl: "https://store.epicgames.com/en-US/p/grand-theft-auto-v",
+            isLiveDeal: true,
+            dealLabel: "Epic Mega Deal (-50%)",
+          ),
+        ],
+        activeDiscountsSummary: "🔥 ACTIVE: 50% OFF on Steam (\$14.99), 50% OFF on PS Store (\$19.99).",
       ),
     ];
   }
@@ -1314,8 +1908,12 @@ class EngineState with ChangeNotifier {
   // Profile Photo modifier
   void setAvatarIndex(int index) {
     selectedAvatarIndex = index;
+    if (index >= 0 && index < BioAvatarConfig.presets.length) {
+      activeBioAvatar = BioAvatarConfig.presets[index];
+    }
     notifyListeners();
     SqliteService.updateOperatorProfile(
+      oldEmail: operatorEmail,
       email: operatorEmail,
       name: operatorName,
       avatarIndex: selectedAvatarIndex,
@@ -1325,15 +1923,66 @@ class EngineState with ChangeNotifier {
     );
   }
 
-  // Soundtrack controls
+  // Soundtrack synthesizer controls
   void toggleSoundtrack() {
     isPlayingSoundtrack = !isPlayingSoundtrack;
+    if (isPlayingSoundtrack) {
+      AudioSynthesizer.instance.play(currentSoundTheme);
+    } else {
+      AudioSynthesizer.instance.stop();
+    }
     notifyListeners();
   }
 
   void nextTrack() {
-    currentTrackIndex = (currentTrackIndex + 1) % playlist.length;
+    final nextIdx = (currentTrackIndex + 1) % SoundTheme.allPresets.length;
+    final nextTheme = SoundTheme.allPresets[nextIdx];
+    currentSoundTheme = nextTheme;
+    setTheme(nextTheme.appTheme);
+
+    final trackName = nextTheme.title;
+    if (!playlist.contains(trackName)) {
+      playlist.add(trackName);
+    }
+    currentTrackIndex = playlist.indexOf(trackName);
     trackProgress = 0.0;
+
+    if (isPlayingSoundtrack) {
+      AudioSynthesizer.instance.play(nextTheme);
+    }
+    notifyListeners();
+  }
+
+  void prevTrack() {
+    final prevIdx = (currentTrackIndex - 1 + SoundTheme.allPresets.length) % SoundTheme.allPresets.length;
+    final prevTheme = SoundTheme.allPresets[prevIdx];
+    currentSoundTheme = prevTheme;
+    setTheme(prevTheme.appTheme);
+
+    final trackName = prevTheme.title;
+    if (!playlist.contains(trackName)) {
+      playlist.add(trackName);
+    }
+    currentTrackIndex = playlist.indexOf(trackName);
+    trackProgress = 0.0;
+
+    if (isPlayingSoundtrack) {
+      AudioSynthesizer.instance.play(prevTheme);
+    }
+    notifyListeners();
+  }
+
+  void selectSoundTheme(SoundTheme theme) {
+    currentSoundTheme = theme;
+    setTheme(theme.appTheme);
+    final trackName = theme.title;
+    if (!playlist.contains(trackName)) {
+      playlist.add(trackName);
+    }
+    currentTrackIndex = playlist.indexOf(trackName);
+    trackProgress = 0.0;
+    isPlayingSoundtrack = true;
+    AudioSynthesizer.instance.play(theme);
     notifyListeners();
   }
 
@@ -1514,25 +2163,41 @@ class EngineState with ChangeNotifier {
   Future<void> generateGame(String prompt) async {
     _isGenerating = true;
     _generationProgress = 0.0;
-    _generationStatus = "Initializing Core Compilation Engine...";
+    _generationStatus = "Initializing Neural Core Compiler...";
     notifyListeners();
 
     final lowerPrompt = prompt.toLowerCase();
     
     // Choose compile steps based on game type
     final List<String> steps;
-    if (lowerPrompt.contains("racing") || lowerPrompt.contains("hill climb") || lowerPrompt.contains("drive") || lowerPrompt.contains("car")) {
+    if (lowerPrompt.contains("racing") || lowerPrompt.contains("hill climb") || lowerPrompt.contains("drive") || lowerPrompt.contains("car") || lowerPrompt.contains("drift") || lowerPrompt.contains("speed")) {
       steps = [
         "Analyzing vehicular prompt vectors...",
-        "Generating 2D hill terrain heightmap...",
-        "Calibrating tire friction dynamic coefficients...",
-        "Compiling wheel suspension physics engine...",
-        "Injecting gravity force calculations...",
-        "Synthesizing combustion engine sound waves...",
+        "Generating 3D terrain heightmap & asphalt mesh...",
+        "Calibrating tire friction & downforce dynamic coefficients...",
+        "Compiling wheel suspension & powertrain physics...",
+        "Synthesizing high-RPM combustion sound waves...",
         "Finalizing telemetry HUD modules...",
         "Simulation core compile complete!"
       ];
-    } else if (lowerPrompt.contains("subway surfer") || lowerPrompt.contains("runner") || lowerPrompt.contains("run") || lowerPrompt.contains("temple run")) {
+    } else if (lowerPrompt.contains("space") || lowerPrompt.contains("orbit") || lowerPrompt.contains("starfield") || lowerPrompt.contains("galaxy") || lowerPrompt.contains("spaceship")) {
+      steps = [
+        "Analyzing deep space orbital dynamics...",
+        "Seeding 3D starfield & cosmic nebula particle grid...",
+        "Synthesizing starship hull & plasma thruster mesh...",
+        "Compiling hyperspace warp drive trajectory algorithms...",
+        "Generating orbital defense telemetry HUD...",
+        "Simulation core compile complete!"
+      ];
+    } else if (lowerPrompt.contains("shooter") || lowerPrompt.contains("fps") || lowerPrompt.contains("warzone") || lowerPrompt.contains("cod") || lowerPrompt.contains("call of duty") || lowerPrompt.contains("gun")) {
+      steps = [
+        "Analyzing tactical shooter combat protocols...",
+        "Constructing urban warfare bunker & defense perimeter...",
+        "Synthesizing weapon ballistics & recoil vectors...",
+        "Calibrating optical reticle & radar tracking systems...",
+        "Simulation core compile complete!"
+      ];
+    } else if (lowerPrompt.contains("subway") || lowerPrompt.contains("runner") || lowerPrompt.contains("run") || lowerPrompt.contains("temple run")) {
       steps = [
         "Analyzing endless runner layout semantics...",
         "Constructing triple-lane grid system...",
@@ -1540,34 +2205,30 @@ class EngineState with ChangeNotifier {
         "Spawning dynamic obstacles & cop interceptors...",
         "Seeding collectible coin assets in 3D paths...",
         "Synthesizing high-energy arcade soundtrack...",
-        "Configuring hoverboard energy shield parameters...",
         "Simulation core compile complete!"
       ];
-    } else if (lowerPrompt.contains("inside") || lowerPrompt.contains("nightmare") || lowerPrompt.contains("limbo") || lowerPrompt.contains("platformer") || lowerPrompt.contains("atmospheric")) {
+    } else if (lowerPrompt.contains("fantasy") || lowerPrompt.contains("zelda") || lowerPrompt.contains("rpg") || lowerPrompt.contains("dragon") || lowerPrompt.contains("knight") || lowerPrompt.contains("magic")) {
       steps = [
-        "Analyzing atmospheric platformer level grammar...",
-        "Synthesizing 2.5D depth layers & parallax backdrops...",
-        "Injecting volumetric lighting & shadow mapping...",
-        "Compiling ragdoll physics & climbing logic...",
-        "Generating spooky industrial ambient soundscapes...",
-        "Calibrating character flashlight/lantern vectors...",
+        "Analyzing mythic high-fantasy world narrative...",
+        "Synthesizing medieval castle battlements & soaring spires...",
+        "Compiling mana aura particle shaders...",
+        "Seeding legendary dragon encounter logic...",
         "Simulation core compile complete!"
       ];
     } else {
       steps = [
         "Analyzing prompt semantic features...",
-        "Compiling cyberpunk 3D voxel grid...",
-        "Procedurally generating street layouts...",
-        "Synthesizing NPC dialogue trees (Aegis-9 & Vesper)...",
-        "Injecting dynamic climate (Neon Rain & Electric Fog)...",
-        "Synchronizing audio synthesis synthesizer...",
-        "Finalizing shader textures and skyboxes...",
+        "Compiling custom 3D voxel grid & city structures...",
+        "Procedurally generating open-world layout...",
+        "Synthesizing authentic universe NPCs & missions...",
+        "Injecting dynamic climate & atmospheric skyboxes...",
+        "Synchronizing procedural soundtrack synthesizer...",
         "Generation complete!"
       ];
     }
 
     for (int i = 0; i < steps.length; i++) {
-      await Future.delayed(Duration(milliseconds: 600 + _random.nextInt(300)));
+      await Future.delayed(Duration(milliseconds: 400 + _random.nextInt(250)));
       _generationProgress = (i + 1) / steps.length;
       _generationStatus = steps[i];
       notifyListeners();
@@ -1576,180 +2237,172 @@ class EngineState with ChangeNotifier {
     proceduralSeed = _random.nextDouble() * 9999999;
     resetSimulationState();
 
-    if (lowerPrompt.contains("racing") || lowerPrompt.contains("hill climb") || lowerPrompt.contains("drive") || lowerPrompt.contains("car")) {
-      activeGameType = "racing";
-      gameTitle = "HILL CLIMB REALM";
-      gameGenre = "Physics driving simulator";
-      storyOutline = "Drive a high-torque rover uphill against extreme gravity forces to rescue stranded explorers.";
-      npcs = [
-        GeneratedNPC(
-          name: "Newton",
-          role: "Chief Engineer",
-          dialogue: "Watch that torque slider! If the suspension is too stiff, you will flip on the steep hills.",
-          emotion: "Anxious",
-        ),
-        GeneratedNPC(
-          name: "Bill",
-          role: "Test Pilot",
-          dialogue: "Full throttle! The suspension load is holding. Let's see how much speed we can pull.",
-          emotion: "Thrilled",
-        )
-      ];
-      missions = [
-        GeneratedMission(
-          title: "Peak Ascent",
-          description: "Climb past the 1,500-meter marker on the volcanic ridge.",
-          rewards: "Hyper-Coil Suspension, 5,000 Credits",
-        ),
-        GeneratedMission(
-          title: "Zero G Leap",
-          description: "Achieve 4 seconds of continuous airtime by ramping off a steep cliff.",
-          rewards: "Carbon Fiber Chassis, 8,000 Credits",
-        )
-      ];
-    } else if (lowerPrompt.contains("inside") || lowerPrompt.contains("nightmare") || lowerPrompt.contains("limbo") || lowerPrompt.contains("platformer") || lowerPrompt.contains("atmospheric")) {
-      activeGameType = "platformer";
-      gameTitle = "VESPER'S ECHO";
-      gameGenre = "Atmospheric 2.5D platformer";
-      storyOutline = "Navigate a silent, dystopian voxel facility, avoiding searchlights and solving physics puzzles to upload your memory core.";
-      npcs = [
-        GeneratedNPC(
-          name: "Watcher",
-          role: "Sentinel Drone",
-          dialogue: "...TARGET SCAN IN PROGRESS... INTERFERENCE SPOTTED...",
-          emotion: "Terrifying",
-        ),
-        GeneratedNPC(
-          name: "Echo-4",
-          role: "Memory Hologram",
-          dialogue: "Stay low in the shadows. The light sensors can't penetrate dark voxel corners.",
-          emotion: "Supportive",
-        )
-      ];
-      missions = [
-        GeneratedMission(
-          title: "Shadow Infiltration",
-          description: "Reach the ventilation shaft without triggering the high-voltage alarm grid.",
-          rewards: "Volumetric Flashlight, 6,500 Credits",
-        ),
-        GeneratedMission(
-          title: "Gravity Lock",
-          description: "Balance the voxel scale containers to unlock the maintenance bay doors.",
-          rewards: "Reinforced Grip Gloves, 9,000 Credits",
-        )
-      ];
-    } else if (lowerPrompt.contains("subway surfer") || lowerPrompt.contains("runner") || lowerPrompt.contains("run") || lowerPrompt.contains("temple run")) {
-      activeGameType = "runner";
-      gameTitle = "SUBWAY SHIFT";
-      gameGenre = "Endless arcade runner";
-      storyOutline = "Dash through active cyber-rails, evading security droids and collecting core batteries.";
-      npcs = [
-        GeneratedNPC(
-          name: "Dash",
-          role: "Grid Runner",
-          dialogue: "Keep swerving! The lane sensors blink red right before an inspector droid spawns.",
-          emotion: "Focused",
-        ),
-        GeneratedNPC(
-          name: "K-9 Unit",
-          role: "Chasing Guard",
-          dialogue: "HALT CITIZEN! Illegal hoverboard deployment detected in sector 4.",
-          emotion: "Hostile",
-        )
-      ];
-      missions = [
-        GeneratedMission(
-          title: "Battery Surge",
-          description: "Collect 50 core batteries in a single run.",
-          rewards: "Super Jetpack, 3,500 Credits",
-        ),
-        GeneratedMission(
-          title: "Droid Evader",
-          description: "Evade 12 inspector droids without deploying a shield.",
-          rewards: "Neon Hoverboard, 6,000 Credits",
-        )
-      ];
-    } else if (lowerPrompt.contains("cyberpunk") || lowerPrompt.contains("futuristic")) {
-      activeGameType = "cyberpunk";
-      gameTitle = "NEO-TOKYO SHIFT";
-      gameGenre = "Cyberpunk RPG";
-      storyOutline = "A rogue AI takes control of a hover-bike assembly line in Neo-Tokyo.";
-      npcs = [
-        GeneratedNPC(
-          name: "Vesper",
-          role: "Netrunner Legend",
-          dialogue: "You ready to plug in? The grids are burning red tonight.",
-          emotion: "Excited",
-        ),
-        GeneratedNPC(
-          name: "Kaelen",
-          role: "Cybernetic Fixer",
-          dialogue: "Got some new chrome. Heavy armor, light weight. Fits you perfectly.",
-          emotion: "Shrewd",
-        )
-      ];
-      missions = [
-        GeneratedMission(
-          title: "Mainframe Breach",
-          description: "Infiltrate the Arasaka sub-network and download the AI Core blueprint.",
-          rewards: "10,000 Credits, Epic Deck Upgrade",
-        ),
-        GeneratedMission(
-          title: "Neon Chase",
-          description: "Evade tactical interceptors in the lower-city highway using custom vehicle physics.",
-          rewards: "5,000 Credits, Nitro Injector",
-        )
-      ];
-    } else if (lowerPrompt.contains("space") || lowerPrompt.contains("orbit")) {
-      activeGameType = "space";
-      gameTitle = "ORBITAL BREACH";
-      gameGenre = "Space Simulator / Action";
-      storyOutline = "A derelict space freighter contains a hidden warp drive that could save the colony.";
-      npcs = [
-        GeneratedNPC(
-          name: "Captain Orion",
-          role: "Colony Pioneer",
-          dialogue: "Keep your shields up. These solar flares will melt our navigation array in seconds.",
-          emotion: "Stressed",
-        ),
-        GeneratedNPC(
-          name: "HALO-8",
-          role: "Navigation AI",
-          dialogue: "Hyperspace vectors calculated. Probability of asteroid collision: 0.12%. Let us jump.",
-          emotion: "Calm",
-        )
-      ];
-      missions = [
-        GeneratedMission(
-          title: "Warp Recovery",
-          description: "Extract the core containment core from the derelict hold.",
-          rewards: "Anti-matter drive, 12,000 Credits",
-        )
-      ];
-    } else {
-      activeGameType = "general";
-      gameTitle = "DREAM REALM ALPHA";
-      gameGenre = "Procedural Action-Adventure";
-      storyOutline = "The virtual landscape morphs dynamically as player choices affect the game engine.";
-      npcs = [
-        GeneratedNPC(
-          name: "Vesper",
-          role: "Guide AI",
-          dialogue: "This dream node is compiling. You can specify any game genre or software architecture in your prompts.",
-          emotion: "Neutral",
-        )
-      ];
-      missions = [
-        GeneratedMission(
-          title: "First Step",
-          description: "Explore the newly compiled dynamic realm.",
-          rewards: "Core Sync Blueprint",
-        )
-      ];
-    }
+    // Directly synthesize the exact game from prompt
+    _synthesizeGameFromPrompt(prompt);
 
     _isGenerating = false;
     notifyListeners();
+  }
+
+  void _synthesizeGameFromPrompt(String prompt) {
+    lastGeneratedPrompt = prompt.trim();
+    final lower = prompt.toLowerCase().trim();
+
+    if (lower.contains("gta") || lower.contains("grand theft auto") || lower.contains("vice city")) {
+      gameTitle = "GTA VI: VICE CITY";
+      gameGenre = "Open-World Crime Action";
+      activeGameType = "city";
+      storyOutline = "Build your criminal empire across neon streets, pulling high-stakes heists and evading federal task forces.";
+      npcs = [
+        GeneratedNPC(name: "Lucia", role: "Heist Specialist", dialogue: "The bank transport route is locked. Let's make this clean.", emotion: "Confident"),
+        GeneratedNPC(name: "Jason", role: "Getaway Driver", dialogue: "Engine is tuned, nitro full. Give me the signal.", emotion: "Excited"),
+      ];
+      missions = [
+        GeneratedMission(title: "Ocean Drive Heist", description: "Infiltrate the vault on Ocean Drive and escape the 5-star police perimeter.", rewards: "Hyper-Supercar, \$250,000"),
+        GeneratedMission(title: "Syndicate Turf War", description: "Take over rival cartel warehouses in the industrial shipping docks.", rewards: "Armored Safehouse, \$100,000"),
+      ];
+    } else if (lower.contains("spider-man") || lower.contains("spiderman")) {
+      gameTitle = "SPIDER-MAN: MANHATTAN RUSH";
+      gameGenre = "Superhero Action-Adventure";
+      activeGameType = "city";
+      storyOutline = "Swing between skyscrapers, stop street crimes with web physics, and protect the city from supervillain outbreaks.";
+      npcs = [
+        GeneratedNPC(name: "Miles", role: "Spider Ally", dialogue: "Bio-electric venom blast is charged! Let's clear the rooftop.", emotion: "Enthusiastic"),
+        GeneratedNPC(name: "Ganke", role: "Tech Support", dialogue: "New police scanner frequency mapped. Hostiles spotted in Midtown.", emotion: "Focused"),
+      ];
+      missions = [
+        GeneratedMission(title: "Rooftop Takedown", description: "Neutralize 15 armed mercenaries without touching the ground.", rewards: "Symbiote Nano Suit, 8,000 XP"),
+        GeneratedMission(title: "High-Speed Pursuit", description: "Web-zip after the stolen armored convoy through Times Square.", rewards: "Web-Wings Glider, 12,000 XP"),
+      ];
+    } else if (lower.contains("mario") || lower.contains("super mario") || lower.contains("nintendo")) {
+      gameTitle = "SUPER MARIO: COSMIC ODYSSEY";
+      gameGenre = "3D Adventure Platformer";
+      activeGameType = "platformer";
+      storyOutline = "Jump across gravity-bending planetary platforms, collect Power Stars, and rescue the Mushroom Kingdom.";
+      npcs = [
+        GeneratedNPC(name: "Luigi", role: "Player 2", dialogue: "M-Mario! Watch out for that giant bouncing Bob-omb!", emotion: "Nervous"),
+        GeneratedNPC(name: "Toad", role: "Mushroom Guide", dialogue: "Thank you Mario! But our Princess is in another galaxy!", emotion: "Cheerful"),
+      ];
+      missions = [
+        GeneratedMission(title: "Power Star Launch", description: "Navigate the spinning asteroid platforms to grab the gold star.", rewards: "Fire Flower Suit, 100 Coins"),
+        GeneratedMission(title: "Bowser Fortress Leap", description: "Wall-kick over lava pits to hit the fortress axe bridge.", rewards: "Super Mushroom, 500 Coins"),
+      ];
+    } else if (lower.contains("minecraft") || lower.contains("voxel") || lower.contains("craft")) {
+      gameTitle = "MINECRAFT: VOXEL REALM";
+      gameGenre = "Voxel Sandbox Survival";
+      activeGameType = "city";
+      storyOutline = "Mine resources, craft voxel tools, and build magnificent fortresses while defending against nighttime monsters.";
+      npcs = [
+        GeneratedNPC(name: "Steve", role: "Master Builder", dialogue: "We need more obsidian for the Nether Portal before sundown.", emotion: "Determined"),
+        GeneratedNPC(name: "Alex", role: "Survivalist", dialogue: "Creeper spotted by the farm! Grab your enchanted diamond sword!", emotion: "Alarmed"),
+      ];
+      missions = [
+        GeneratedMission(title: "Deep Cave Excavation", description: "Mine 12 Diamond Ore blocks at bedrock level -58.", rewards: "Enchanted Pickaxe, 5,000 Exp"),
+        GeneratedMission(title: "Dragon Slayer", description: "Craft Eye of Ender crystals and defeat the Dragon in the End Realm.", rewards: "Dragon Egg Trophy, 20,000 Exp"),
+      ];
+    } else if (lower.contains("call of duty") || lower.contains("cod") || lower.contains("warzone") || lower.contains("shooter") || lower.contains("fps") || lower.contains("gun") || lower.contains("warfare") || lower.contains("tactical")) {
+      gameTitle = "CALL OF DUTY: WARZONE COMBAT";
+      gameGenre = "Tactical First-Person Shooter";
+      activeGameType = "shooter";
+      storyOutline = "Deploy into high-risk combat zones with modern tactical weaponry, calling in air strikes and securing tactical objectives.";
+      npcs = [
+        GeneratedNPC(name: "Captain Price", role: "Task Force 141", dialogue: "Bravo Six, going dark. Check your corners and stay low.", emotion: "Stoic"),
+        GeneratedNPC(name: "Ghost", role: "Recon Specialist", dialogue: "Hostile UAV overhead. Keep your suppressors on.", emotion: "Stealthy"),
+      ];
+      missions = [
+        GeneratedMission(title: "Sector Infiltration", description: "Breach the enemy missile silo and exfiltrate the intel package.", rewards: "Custom M4 Assault Rifle, 10,000 XP"),
+        GeneratedMission(title: "Warzone Survival", description: "Survive the collapsing gas circle and achieve Victory Royale.", rewards: "Gold Weapon Camo, 25,000 XP"),
+      ];
+    } else if (lower.contains("need for speed") || lower.contains("nfs") || lower.contains("drift") || lower.contains("racing") || lower.contains("car") || lower.contains("hill climb") || lower.contains("drive") || lower.contains("vehicle")) {
+      gameTitle = lower.contains("hill climb") ? "HILL CLIMB RACING: EXTREME" : "NEED FOR SPEED: TOKYO DRIFT";
+      gameGenre = "High-Octane Drift Racing";
+      activeGameType = "racing";
+      storyOutline = "Tune high-horsepower Japanese supercars, drift mountain passes, and outrun highway police pursuit units.";
+      npcs = [
+        GeneratedNPC(name: "Han", role: "Drift King", dialogue: "50% throttle, kick the clutch, and let the rear slip smooth.", emotion: "Chill"),
+        GeneratedNPC(name: "Toretto", role: "Crew Leader", dialogue: "It doesn't matter if you win by an inch or a mile. Winning is winning.", emotion: "Proud"),
+      ];
+      missions = [
+        GeneratedMission(title: "Touge Drift Battle", description: "Score over 100,000 drift points down Mount Akina without hitting the guardrail.", rewards: "Twin-Turbo Kit, \$50,000"),
+        GeneratedMission(title: "Midnight Heat", description: "Escape a 4-car police blockade at 300 km/h on the Shuto Expressway.", rewards: "Custom Widebody RX-7, \$85,000"),
+      ];
+    } else if (lower.contains("space") || lower.contains("orbit") || lower.contains("starfield") || lower.contains("galaxy") || lower.contains("star wars") || lower.contains("spaceship") || lower.contains("zero-g") || lower.contains("astral")) {
+      gameTitle = "STARFIELD: DEEP SPACE COMBAT";
+      gameGenre = "Sci-Fi Space Combat Simulator";
+      activeGameType = "space";
+      storyOutline = "Pilot custom interstellar starships, dogfight enemy dreadnoughts in asteroid belts, and jump hyperspace warp lanes.";
+      npcs = [
+        GeneratedNPC(name: "Captain Orion", role: "Fleet Commander", dialogue: "Shields to maximum! All turrets lock onto the flagship's reactor core!", emotion: "Brave"),
+        GeneratedNPC(name: "HALO-9", role: "Quantum Navigation AI", dialogue: "Warp vector calculated. Engaging sub-light hyperdrive in 3... 2... 1...", emotion: "Calm"),
+      ];
+      missions = [
+        GeneratedMission(title: "Asteroid Dogfight", description: "Shoot down 8 pirate interceptors while navigating dense asteroid debris.", rewards: "Plasma Laser Cannons, 15,000 Credits"),
+        GeneratedMission(title: "Dreadnought Core Breach", description: "Launch proton torpedoes into the thermal exhaust port of the mothership.", rewards: "Warp Core Engine, 30,000 Credits"),
+      ];
+    } else if (lower.contains("zelda") || lower.contains("elden ring") || lower.contains("fantasy") || lower.contains("rpg") || lower.contains("dragon") || lower.contains("knight") || lower.contains("sword") || lower.contains("magic") || lower.contains("god of war")) {
+      gameTitle = lower.contains("god of war") ? "GOD OF WAR: RAGNAROK" : (lower.contains("zelda") ? "THE LEGEND OF ZELDA: HYRULE REALM" : "ELDEN RING: SHADOW REALM");
+      gameGenre = "Mythic Fantasy Action RPG";
+      activeGameType = "fantasy";
+      storyOutline = "Explore a sprawling mythical kingdom, wield elemental magic and enchanted blades, and slay ancient legendary dragons.";
+      npcs = [
+        GeneratedNPC(name: "Eldrin", role: "Arch-Mage", dialogue: "The ancient seal is breaking. Channel the elemental crystals to restore the realm!", emotion: "Wise"),
+        GeneratedNPC(name: "Valkyrie Astrid", role: "Royal Knight", dialogue: "Raise your shield! The beast descends from the storm clouds!", emotion: "Fierce"),
+      ];
+      missions = [
+        GeneratedMission(title: "Dragon Sanctum", description: "Ascend the volcanic peak and defeat the Ancient Red Dragon.", rewards: "Flame-Forged Greatsword, 10,000 Gold"),
+        GeneratedMission(title: "Temple of Light", description: "Solve the mirror puzzles to awaken the slumbering Goddess power.", rewards: "Aegis Shield of Hyrule, 15,000 Gold"),
+      ];
+    } else if (lower.contains("horror") || lower.contains("zombie") || lower.contains("resident evil") || lower.contains("nightmare") || lower.contains("limbo") || lower.contains("inside") || lower.contains("spooky") || lower.contains("survival horror")) {
+      gameTitle = lower.contains("resident evil") ? "RESIDENT EVIL: BIOHAZARD ZERO" : "SHADOW REALM: SURVIVAL HORROR";
+      gameGenre = "Survival Horror & Dread";
+      activeGameType = "horror";
+      storyOutline = "Survive inside a dark quarantined laboratory overrun by mutated bio-weapons with limited ammo and flickering flashlights.";
+      npcs = [
+        GeneratedNPC(name: "Leon", role: "Special Agent", dialogue: "Conserve your ammunition. Aim for the head and don't make a sound.", emotion: "Tense"),
+        GeneratedNPC(name: "Dr. Rebecca", role: "Virologist", dialogue: "The antidote is in the lower containment lab. We have 10 minutes before total lockdown!", emotion: "Desperate"),
+      ];
+      missions = [
+        GeneratedMission(title: "Lab Escape", description: "Find the electronic keycard to unlock the emergency decontamination exit.", rewards: "Shotgun with Incendiary Shells, 5,000 XP"),
+        GeneratedMission(title: "Bio-Titan Slay", description: "Lure the mutated Tyrant into the incinerator chamber.", rewards: "Magnum Pistol, 15,000 XP"),
+      ];
+    } else if (lower.contains("subway") || lower.contains("runner") || lower.contains("run") || lower.contains("temple run") || lower.contains("sonic") || lower.contains("dash")) {
+      gameTitle = "SUBWAY SURFERS: WORLD TOUR";
+      gameGenre = "Endless 3D Arcade Runner";
+      activeGameType = "runner";
+      storyOutline = "Dash down active train tracks on a high-speed hoverboard, dodging obstacles and collecting shiny golden coins.";
+      npcs = [
+        GeneratedNPC(name: "Dash", role: "Pro Surfer", dialogue: "Lane sensors are blinking red! Jump, roll, and activate the jetpack!", emotion: "Energetic"),
+        GeneratedNPC(name: "Inspector", role: "Chasing Guard", dialogue: "Stop right there! No hoverboarding allowed on active rail tracks!", emotion: "Angry"),
+      ];
+      missions = [
+        GeneratedMission(title: "Coin Frenzy", description: "Collect 100 gold coins without picking up a coin magnet.", rewards: "Super High-Top Sneakers, 2,500 Coins"),
+        GeneratedMission(title: "Score Multiplier Rush", description: "Achieve a 500,000 point score in a single continuous run.", rewards: "Cyber Neon Hoverboard, 10,000 Coins"),
+      ];
+    } else {
+      // General custom prompt
+      final words = prompt.replaceAll(RegExp(r'[^\w\s]'), '').trim().split(RegExp(r'\s+'));
+      String titleExtract = "";
+      if (words.length <= 5) {
+        titleExtract = words.join(" ").toUpperCase();
+      } else {
+        titleExtract = words.take(4).join(" ").toUpperCase();
+      }
+      if (titleExtract.startsWith("CREATE A ") || titleExtract.startsWith("BUILD A ")) {
+        titleExtract = titleExtract.replaceFirst(RegExp(r'^(CREATE|BUILD)\s+A\s+'), '');
+      }
+
+      gameTitle = titleExtract.isNotEmpty ? titleExtract : "NEO-SYNTH PROTOCOL";
+      gameGenre = "Procedural Action Experience";
+      activeGameType = lower.contains("city") || lower.contains("open") ? "city" : "cyberpunk";
+      storyOutline = "Experience an evolving procedural simulation where real-time physics and AI neural grids shape the virtual environment.";
+      npcs = [
+        GeneratedNPC(name: "Aegis-9", role: "Synthesizer Core", dialogue: "Compiler initialized for ${gameTitle}. Engine parameters calibrated to prompt specification.", emotion: "Analytical"),
+        GeneratedNPC(name: "Vesper", role: "Guide AI", dialogue: "All shader pipelines and physics colliders are live. Proceed into the simulation.", emotion: "Supportive"),
+      ];
+      missions = [
+        GeneratedMission(title: "Core Initialization", description: "Explore the newly compiled dynamic realm.", rewards: "Quantum Core Blueprint, 5,000 Credits"),
+      ];
+    }
   }
 
   // Matchmaking simulation
@@ -1939,6 +2592,16 @@ class EngineState with ChangeNotifier {
     return success;
   }
 
+  /// Delete a post from DevGram
+  Future<bool> deleteDevgramPost(String postId) async {
+    final success = await SqliteService.deletePost(postId);
+    if (success) {
+      devgramPosts.removeWhere((p) => p["id"] == postId);
+      notifyListeners();
+    }
+    return success;
+  }
+
   /// Toggle like status
   Future<void> likeDevgramPost(String postId) async {
     final success = await SqliteService.toggleLikePost(postId, operatorEmail);
@@ -1979,9 +2642,9 @@ class EngineState with ChangeNotifier {
   }
 
   // Active user profile explorer state
-  Map<String, String>? exploredUserProfile;
+  Map<String, dynamic>? exploredUserProfile;
 
-  void selectUserProfile(Map<String, String> profile) {
+  void selectUserProfile(Map<String, dynamic>? profile) {
     exploredUserProfile = profile;
     notifyListeners();
   }
@@ -2090,6 +2753,170 @@ class EngineState with ChangeNotifier {
       });
       notifyListeners();
     });
+  }
+
+  // --- Calendar & Daily Telemetry State ---
+  bool isSyncingCalendar = false;
+
+  void toggleCalendarEventStar(CalendarEvent event) {
+    event.isStarred = !event.isStarred;
+    notifyListeners();
+  }
+
+  void addCustomCalendarEvent(CalendarEvent event) {
+    calendarEvents.removeWhere((e) => e.title.toLowerCase() == event.title.toLowerCase());
+    calendarEvents.insert(0, event);
+    calendarEvents.sort((a, b) => a.date.compareTo(b.date));
+    notifyListeners();
+  }
+
+  Future<void> refreshDailyCalendarEvents() async {
+    isSyncingCalendar = true;
+    notifyListeners();
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final List<CalendarEvent> freshEvents = [
+      CalendarEvent(
+        title: "Steam Midweek Flash Deals & Publisher Spotlight",
+        date: today,
+        type: "sale",
+        description: "Active real-time flash discounts up to 85% off on Steam Store today.",
+        platform: "Steam",
+        expectedDiscount: 85.0,
+        storeUrl: "https://store.steampowered.com/specials",
+      ),
+      CalendarEvent(
+        title: "PlayStation Store Essential Double Discounts",
+        date: today.add(const Duration(days: 1)),
+        type: "sale",
+        description: "PS Plus member exclusive double savings across 500+ PS5 & PS4 digital titles.",
+        platform: "PlayStation 5 | PS4",
+        expectedDiscount: 60.0,
+        storeUrl: "https://store.playstation.com",
+      ),
+      CalendarEvent(
+        title: "Kingdom Come: Deliverance II Beta Deploy",
+        date: today.add(const Duration(days: 3)),
+        type: "release",
+        description: "Warhorse Studios historical medieval RPG dynamic combat deployment.",
+        platform: "PC / PS5 / Xbox Series X",
+        expectedPrice: 69.99,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      CalendarEvent(
+        title: "Epic Games Mega Mystery Vault Unlock",
+        date: today.add(const Duration(days: 5)),
+        type: "sale",
+        description: "Free weekly AAA mystery vault claim and 33% publisher promotional coupon drop.",
+        platform: "Epic Games",
+        expectedDiscount: 100.0,
+        storeUrl: "https://store.epicgames.com",
+      ),
+      CalendarEvent(
+        title: "Monster Hunter Wilds: Fleet Hunter Demo",
+        date: today.add(const Duration(days: 8)),
+        type: "release",
+        description: "Capcom's next-gen dynamic ecosystem hunting action RPG trial build.",
+        platform: "PC / PS5 / Xbox Series X",
+        expectedPrice: 69.99,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      CalendarEvent(
+        title: "Steam Next Fest: Global Demos Showcase",
+        date: today.add(const Duration(days: 14)),
+        type: "sale",
+        description: "7-day celebration of hundreds of playable game demos, developer livestreams & pre-order deals.",
+        platform: "Steam",
+        expectedDiscount: 50.0,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      CalendarEvent(
+        title: "Hollow Knight: Silksong",
+        date: today.add(const Duration(days: 21)),
+        type: "release",
+        description: "The long-awaited sequel to Team Cherry's masterpiece action-platformer featuring Hornet.",
+        platform: "PC / Nintendo Switch / PS5 / Xbox",
+        expectedPrice: 29.99,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      CalendarEvent(
+        title: "Steam Halloween Scream & Fear Fest",
+        date: today.add(const Duration(days: 35)),
+        type: "sale",
+        description: "Dark fantasy, survival horror, and atmospheric thriller games up to 80% off.",
+        platform: "Steam",
+        expectedDiscount: 80.0,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      CalendarEvent(
+        title: "Death Stranding 2: On The Beach",
+        date: today.add(const Duration(days: 48)),
+        type: "release",
+        description: "Hideo Kojima's next cinematic masterpiece across a fragmented world with Sam Porter Bridges.",
+        platform: "PlayStation 5 / PC",
+        expectedPrice: 69.99,
+        storeUrl: "https://store.playstation.com",
+      ),
+      CalendarEvent(
+        title: "Black Friday & Cyber Week Mega Telemetry",
+        date: today.add(const Duration(days: 65)),
+        type: "sale",
+        description: "Year's deepest discounts across Steam, PlayStation Store, Nintendo eShop, and Epic Games.",
+        platform: "All Platforms",
+        expectedDiscount: 90.0,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      CalendarEvent(
+        title: "Grand Theft Auto VI",
+        date: today.add(const Duration(days: 82)),
+        type: "release",
+        description: "Rockstar Games returns to Leonida / Vice City, setting new benchmarks for open-world gaming.",
+        platform: "PlayStation 5 / Xbox Series X",
+        expectedPrice: 79.99,
+        storeUrl: "https://store.playstation.com",
+      ),
+      CalendarEvent(
+        title: "Steam Winter Holiday Sale & Steam Awards",
+        date: today.add(const Duration(days: 110)),
+        type: "sale",
+        description: "Site-wide winter discounts, holiday trading card events, and community Steam Awards voting.",
+        platform: "Steam",
+        expectedDiscount: 85.0,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      CalendarEvent(
+        title: "Doom: The Dark Ages",
+        date: today.add(const Duration(days: 140)),
+        type: "release",
+        description: "id Software's prequel to Doom (2016) with dark fantasy medieval heavy metal combat.",
+        platform: "PC / PS5 / Xbox Series X",
+        expectedPrice: 69.99,
+        storeUrl: "https://store.steampowered.com",
+      ),
+      CalendarEvent(
+        title: "Metroid Prime 4: Beyond",
+        date: today.add(const Duration(days: 180)),
+        type: "release",
+        description: "Samus Aran returns in an epic new galaxy-scale first-person adventure.",
+        platform: "Nintendo Switch",
+        expectedPrice: 59.99,
+        storeUrl: "https://store.steampowered.com",
+      ),
+    ];
+
+    for (var ev in calendarEvents) {
+      if (!freshEvents.any((fe) => fe.title.toLowerCase() == ev.title.toLowerCase())) {
+        freshEvents.add(ev);
+      }
+    }
+
+    freshEvents.sort((a, b) => a.date.compareTo(b.date));
+    calendarEvents = freshEvents;
+    isSyncingCalendar = false;
+    notifyListeners();
   }
 
   // --- Game Stocks & Store State ---
